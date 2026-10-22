@@ -397,6 +397,32 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 14),
+            decoration: BoxDecoration(
+              color: AppColors.amber.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, color: AppColors.amber, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'LƯU Ý KỸ THUẬT: Firmware xe hiện tại (v1.14.0) chưa hỗ trợ nạp cấu hình phanh RECUP & tay ga trực tiếp qua Bluetooth. Tùy chọn này được lưu làm hồ sơ cá nhân trên ứng dụng.',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11.5,
+                      color: AppColors.textPrimary,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           // 1. Phanh tái sinh (Regenerative Braking RECUP)
           Row(
             children: [
@@ -508,6 +534,33 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Ghi chú kỹ thuật về tính năng còi tìm xe
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, color: AppColors.secondary, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Đặc tả BLE: Còi tìm xe hiện phát tín hiệu thử nghiệm an toàn qua Alert Service (0x5B6D1069). Ứng dụng đã gỡ bỏ hoàn toàn việc can thiệp vào công tắc nguồn (0x350D9A82) để bảo vệ tuyệt đối relay xe.',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11.5,
+                      color: AppColors.textPrimary,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
           Text(
             'Chọn mẫu nhịp chuông kèn khi bấm "Tìm xe" trong bãi đỗ:',
             style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
@@ -639,8 +692,35 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'CẢNH BÁO AN TOÀN: Firmware xe hiện tại (v1.14.0) KHÔNG hỗ trợ giới hạn tốc độ xe từ Bluetooth! Xe vẫn chạy với công suất nguyên bản. TUYỆT ĐỐI KHÔNG sử dụng tùy chọn này làm chốt an toàn để cho người mới tập lái mượn xe!',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.error,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
           Text(
-            'Hãm vận tốc tối đa bằng ECU để đảm bảo an toàn cho người mới tập lái hoặc cho mượn xe:',
+            'Hồ sơ tốc độ lái khuyến nghị trên ứng dụng (App-side Driver Profile):',
             style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
           ),
           const SizedBox(height: 12),
@@ -648,21 +728,21 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
             children: [
               _buildSegmentOption(
                 label: 'Không giới hạn',
-                desc: 'Full Power 100+ km/h',
+                desc: 'Hồ sơ Full Power',
                 isSelected: ble.speedLimitMode == 0,
                 onTap: () => ref.read(bleProvider.notifier).setSpeedLimitMode(0),
               ),
               const SizedBox(width: 8),
               _buildSegmentOption(
                 label: 'Đô thị',
-                desc: 'Khóa ở 50 km/h',
+                desc: 'Khuyến nghị 50 km/h',
                 isSelected: ble.speedLimitMode == 1,
                 onTap: () => ref.read(bleProvider.notifier).setSpeedLimitMode(1),
               ),
               const SizedBox(width: 8),
               _buildSegmentOption(
                 label: 'Tập lái',
-                desc: 'Khóa ở 30 km/h',
+                desc: 'Khuyến nghị 30 km/h',
                 isSelected: ble.speedLimitMode == 2,
                 onTap: () => ref.read(bleProvider.notifier).setSpeedLimitMode(2),
               ),

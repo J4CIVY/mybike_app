@@ -90,13 +90,13 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
           if (!connected) ...[
             const NoticeBanner(
               color: AppColors.amber,
-              text: 'Xe chưa kết nối Bluetooth. Hiển thị dữ liệu chẩn đoán mô phỏng chuẩn EV.',
+              text: 'Xe chưa kết nối Bluetooth. Vui lòng kết nối xe để quét thông số BMS và OBD.',
             ),
             const SizedBox(height: 14),
           ] else if (report.isSimulated) ...[
             const NoticeBanner(
               color: AppColors.secondary,
-              text: 'Đang liên tục đồng bộ dữ liệu cell pin từ BMS qua kênh telemetry bảo mật.',
+              text: 'Đã kết nối Bluetooth. Đang chờ gói tin chi tiết cell từ BMS xe (chế độ Telemetry cơ bản).',
             ),
             const SizedBox(height: 14),
           ],
@@ -287,7 +287,9 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
 
   // ========== WIDGET 2: THẺ DELTA V & CÂN BẰNG CELL ==========
   Widget _buildCellBalanceCard(BatteryHealthReport report) {
+    final hasCells = report.cellCount > 0;
     final gradeColor = switch (report.balanceGrade) {
+      CellBalanceGrade.unknown => AppColors.secondary,
       CellBalanceGrade.excellent => AppColors.tertiary,
       CellBalanceGrade.good => AppColors.secondary,
       CellBalanceGrade.fair => AppColors.amber,
@@ -322,7 +324,7 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                     textBaseline: TextBaseline.alphabetic,
                     children: [
                       Text(
-                        report.deltaVoltageMv.toStringAsFixed(1),
+                        hasCells ? report.deltaVoltageMv.toStringAsFixed(1) : '--',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 34,
                           fontWeight: FontWeight.w800,
@@ -377,7 +379,7 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Cell cao nhất (#${report.maxCellIndex})',
+                        hasCells ? 'Cell cao nhất (#${report.maxCellIndex})' : 'Cell cao nhất',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -386,7 +388,7 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${report.maxCellVoltage.toStringAsFixed(3)} V',
+                        hasCells ? '${report.maxCellVoltage.toStringAsFixed(3)} V' : '-- V',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -415,7 +417,7 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Cell thấp nhất (#${report.minCellIndex})',
+                        hasCells ? 'Cell thấp nhất (#${report.minCellIndex})' : 'Cell thấp nhất',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -424,7 +426,7 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${report.minCellVoltage.toStringAsFixed(3)} V',
+                        hasCells ? '${report.minCellVoltage.toStringAsFixed(3)} V' : '-- V',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -458,7 +460,7 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${report.avgCellVoltage.toStringAsFixed(3)} V',
+                        hasCells ? '${report.avgCellVoltage.toStringAsFixed(3)} V' : '-- V',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -477,11 +479,12 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
     );
   }
 
-  // ========== WIDGET 3: BIỂU ĐỒ 20/24 CELL VOLTAGES BAR CHART ==========
+  // ========== WIDGET 3: BIỂU ĐỒ CELL VOLTAGES BAR CHART ==========
   Widget _buildCellVoltagesChart(BatteryHealthReport report) {
     final cells = report.cellVoltages;
-    final minV = (report.minCellVoltage - 0.05).clamp(2.5, 4.2);
-    final maxV = (report.maxCellVoltage + 0.05).clamp(minV + 0.05, 4.3);
+    final hasCells = cells.isNotEmpty;
+    final minV = hasCells ? (report.minCellVoltage - 0.05).clamp(2.5, 4.2) : 2.5;
+    final maxV = hasCells ? (report.maxCellVoltage + 0.05).clamp(minV + 0.05, 4.3) : 4.2;
 
     return Panel(
       padding: const EdgeInsets.all(18),
@@ -508,7 +511,7 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                 ),
               ),
               const Spacer(),
-              if (_selectedCellIndex != null)
+              if (hasCells && _selectedCellIndex != null && _selectedCellIndex! < cells.length)
                 Text(
                   'Cell #${_selectedCellIndex! + 1}: ${cells[_selectedCellIndex!].toStringAsFixed(3)} V',
                   style: GoogleFonts.spaceGrotesk(
@@ -517,47 +520,81 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                     color: AppColors.primary,
                   ),
                 )
-              else
+              else if (hasCells)
                 Text(
                   'Chạm vào cell để xem',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textDim),
+                )
+              else
+                Text(
+                  'Đang chờ dữ liệu BMS...',
                   style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textDim),
                 ),
             ],
           ),
           const SizedBox(height: 16),
 
-          // Layout 24 cột điện áp dạng biểu đồ
-          SizedBox(
-            height: 150,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: List.generate(cells.length, (idx) {
-                final v = cells[idx];
-                final normalized = ((v - minV) / (maxV - minV)).clamp(0.08, 1.0);
-                final isLowest = (idx + 1) == report.minCellIndex;
-                final isHighest = (idx + 1) == report.maxCellIndex;
-                final isSelected = _selectedCellIndex == idx;
+          if (!hasCells)
+            Container(
+              height: 120,
+              width: double.infinity,
+              alignment: Alignment.center,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppColors.panelSecondary,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.panelBorder),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.developer_board_off_rounded, color: AppColors.textDim, size: 28),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Chưa nhận được gói tin chi tiết điện áp từng cell từ BMS qua Bluetooth.\nỨng dụng sẽ tự động vẽ biểu đồ ngay khi xe truyền telemetry BMS.',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11.5,
+                      color: AppColors.textDim,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            // Layout các cột điện áp dạng biểu đồ
+            SizedBox(
+              height: 150,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(cells.length, (idx) {
+                  final v = cells[idx];
+                  final normalized = ((v - minV) / (maxV - minV)).clamp(0.08, 1.0);
+                  final isLowest = (idx + 1) == report.minCellIndex;
+                  final isHighest = (idx + 1) == report.maxCellIndex;
+                  final isSelected = _selectedCellIndex == idx;
 
-                final Color barColor;
-                if (isLowest && report.deltaVoltageMv > 60) {
-                  barColor = AppColors.error;
-                } else if (isHighest) {
-                  barColor = AppColors.primary;
-                } else if (isSelected) {
-                  barColor = AppColors.secondary;
-                } else {
-                  barColor = AppColors.primary.withValues(alpha: 0.55);
-                }
+                  final Color barColor;
+                  if (isLowest && report.deltaVoltageMv > 60) {
+                    barColor = AppColors.error;
+                  } else if (isHighest) {
+                    barColor = AppColors.primary;
+                  } else if (isSelected) {
+                    barColor = AppColors.secondary;
+                  } else {
+                    barColor = AppColors.primary.withValues(alpha: 0.55);
+                  }
 
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedCellIndex = (_selectedCellIndex == idx) ? null : idx;
-                      });
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 1.5),
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedCellIndex = (_selectedCellIndex == idx) ? null : idx;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 1.5),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -781,6 +818,55 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
             ],
           ),
           const SizedBox(height: 14),
+          // Hiển thị mã lỗi thô VESC từ ECU
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.panelSecondary,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.panelBorder),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.memory_rounded, size: 16, color: AppColors.textDim),
+                const SizedBox(width: 8),
+                Text(
+                  'VESC mc_fault_code:',
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDim,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: (report.rawErrorCode == 0 ? AppColors.tertiary : AppColors.error).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '0x${report.rawErrorCode.toRadixString(16).padLeft(2, '0').toUpperCase()} (${report.rawErrorCode})',
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: report.rawErrorCode == 0 ? AppColors.tertiary : AppColors.error,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  report.rawErrorCode == 0 ? 'FAULT_NONE' : 'PHÁT HIỆN SỰ CỐ',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: report.rawErrorCode == 0 ? AppColors.tertiary : AppColors.error,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
           const Divider(color: AppColors.panelBorder, height: 1),
           const SizedBox(height: 6),
 

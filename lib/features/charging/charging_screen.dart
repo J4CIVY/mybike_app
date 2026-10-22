@@ -1,8 +1,8 @@
-// Charging Screen — Bộ Định Tuyến Sạc Thông Minh & Bản Đồ Trạm Sạc Dat Charge
+// Charging Screen — Giám Sát Chi Tiết Thông Số & Tiến Độ Sạc Pin EV
 // Chuẩn thiết kế Kinetic Stitch EV:
 // 1. Giám sát chi tiết dòng sạc, điện áp lưới AC Vin_RMS, nhiệt độ FET, công suất Watt.
 // 2. Bộ đếm thời gian sạc thông minh: ETA đạt 80% (mốc vàng) & 100%, giới hạn sạc tùy chỉnh.
-// 3. Bản đồ & danh bạ trạm sạc Dat Charge: Đánh giá khả thi tầm pin, lọc trạm, mở chỉ đường Google Maps.
+// 3. Phân tích trạng thái an toàn: Cảnh báo sụt áp/quá áp lưới điện và quá nhiệt FET sạc.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,11 +21,7 @@ class ChargingScreen extends ConsumerStatefulWidget {
 }
 
 class _ChargingScreenState extends ConsumerState<ChargingScreen> {
-  int _activeTab = 0; // 0: Trạng thái sạc, 1: Trạm sạc Dat Charge
   int _selectedSocLimit = 80; // Mặc định 80% để bảo vệ pin EV
-  String _selectedCity = 'Tất cả';
-  bool _filterWithinRangeOnly = false;
-  bool _filterSuperBoostOnly = false;
 
   String _formatDuration(Duration d) {
     if (d.inSeconds <= 0) return 'Đã đạt mốc';
@@ -51,7 +47,7 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         title: Text(
-          'ĐỊNH TUYẾN & TRẠM SẠC',
+          'THÔNG SỐ & TIẾN ĐỘ SẠC',
           style: GoogleFonts.spaceGrotesk(
             fontWeight: FontWeight.w700,
             fontSize: 18,
@@ -60,100 +56,10 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
           ),
         ),
       ),
-      body: Column(
-        children: [
-          // Tab switcher ở đầu màn hình
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Container(
-              height: 44,
-              padding: const EdgeInsets.all(4),
-              decoration: BoxDecoration(
-                color: AppColors.panelSecondary,
-                borderRadius: BorderRadius.circular(14),
-                border: Border.all(color: AppColors.panelBorder),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: _buildSubTabButton(
-                      label: 'TRẠNG THÁI SẠC',
-                      icon: Icons.bolt_rounded,
-                      isSelected: _activeTab == 0,
-                      onTap: () => setState(() => _activeTab = 0),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: _buildSubTabButton(
-                      label: 'TRẠM SẠC DAT CHARGE',
-                      icon: Icons.ev_station_rounded,
-                      isSelected: _activeTab == 1,
-                      onTap: () => setState(() => _activeTab = 1),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Nội dung tab
-          Expanded(
-            child: _activeTab == 0
-                ? _buildChargingHudTab(report, currentPercent, kmLeft)
-                : _buildStationsTab(kmLeft),
-          ),
-        ],
-      ),
+      body: _buildChargingHudTab(report, currentPercent, kmLeft),
     );
   }
 
-  Widget _buildSubTabButton({
-    required String label,
-    required IconData icon,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(10),
-        onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: isSelected ? AppColors.panel : Colors.transparent,
-            borderRadius: BorderRadius.circular(10),
-            boxShadow: isSelected ? AppColors.cardShadow : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 16,
-                color: isSelected ? AppColors.primary : AppColors.textDim,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: GoogleFonts.spaceGrotesk(
-                  fontSize: 11,
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                  color: isSelected ? AppColors.primary : AppColors.textDim,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // =========================================================================
-  // TAB 1: TRẠNG THÁI SẠC THÔNG MINH (CHARGING HUD)
-  // =========================================================================
   Widget _buildChargingHudTab(
     ChargingStatusReport report,
     int currentPercent,
@@ -296,12 +202,12 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                 children: [
                   _buildChargingMetric(
                     label: 'ĐIỆN LƯỚI AC',
-                    value: '${report.gridVoltageRms.toStringAsFixed(1)} V',
+                    value: report.gridVoltageRms != null ? '${report.gridVoltageRms!.toStringAsFixed(0)} V' : 'N/A',
                     valueColor: report.isGridUnstable ? AppColors.error : AppColors.textPrimary,
                   ),
                   _buildChargingMetric(
                     label: 'NHIỆT CỦ SẠC',
-                    value: '${report.fetTemp} °C',
+                    value: report.fetTemp != null ? '${report.fetTemp} °C' : 'N/A',
                     valueColor: report.isFetOverheat ? AppColors.error : AppColors.textPrimary,
                   ),
                   _buildChargingMetric(
@@ -526,301 +432,4 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
     );
   }
 
-  // =========================================================================
-  // TAB 2: BẢN ĐỒ & DANH BẠ TRẠM SẠC DAT CHARGE
-  // =========================================================================
-  Widget _buildStationsTab(double kmLeft) {
-    // Tọa độ tham chiếu trung tâm (TP.HCM: 10.7769, 106.7009)
-    const userLat = 10.7769;
-    const userLng = 106.7009;
-
-    var filteredStations = ChargingRouterService.stations.where((s) {
-      if (_selectedCity != 'Tất cả' && s.city != _selectedCity) return false;
-      if (_filterSuperBoostOnly && s.powerKw < 4.0) return false;
-      if (_filterWithinRangeOnly) {
-        final dist = ChargingRouterService.calculateDistanceKm(
-          lat1: userLat,
-          lon1: userLng,
-          lat2: s.latitude,
-          lon2: s.longitude,
-        );
-        if (kmLeft < dist) return false;
-      }
-      return true;
-    }).toList();
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-      children: [
-        // 1. Thẻ thông tin cự ly pin hiện tại
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.primary.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.radar_rounded, color: AppColors.primary, size: 22),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'TẦM HOẠT ĐỘNG PIN CỦA BẠN',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                    Text(
-                      'Khoảng ${kmLeft.toStringAsFixed(1)} km pin còn lại',
-                      style: GoogleFonts.spaceGrotesk(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              StatusPill(
-                label: kmLeft > 40 ? 'DƯ DẢ' : 'CẦN SẠC',
-                color: kmLeft > 40 ? AppColors.tertiary : AppColors.amber,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // 2. Bộ lọc Thành phố & Tiêu chí
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              _buildCityFilterChip('Tất cả'),
-              _buildCityFilterChip('TP. Hồ Chí Minh'),
-              _buildCityFilterChip('Hà Nội'),
-              _buildCityFilterChip('Đà Nẵng'),
-              _buildCityFilterChip('Bình Dương'),
-            ],
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        Row(
-          children: [
-            FilterChip(
-              label: Text(
-                'Trong tầm pin',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _filterWithinRangeOnly ? Colors.white : AppColors.textPrimary,
-                ),
-              ),
-              selected: _filterWithinRangeOnly,
-              selectedColor: AppColors.primary,
-              backgroundColor: AppColors.panel,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              onSelected: (val) => setState(() => _filterWithinRangeOnly = val),
-            ),
-            const SizedBox(width: 8),
-            FilterChip(
-              label: Text(
-                '⚡ Siêu nhanh 4kW',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: _filterSuperBoostOnly ? Colors.white : AppColors.textPrimary,
-                ),
-              ),
-              selected: _filterSuperBoostOnly,
-              selectedColor: AppColors.secondary,
-              backgroundColor: AppColors.panel,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              onSelected: (val) => setState(() => _filterSuperBoostOnly = val),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-
-        // 3. Danh sách thẻ trạm sạc
-        for (final station in filteredStations)
-          _buildStationCard(station, userLat, userLng, kmLeft),
-      ],
-    );
-  }
-
-  Widget _buildCityFilterChip(String city) {
-    final isSelected = _selectedCity == city;
-    return Padding(
-      padding: const EdgeInsets.only(right: 6),
-      child: ChoiceChip(
-        label: Text(
-          city,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? Colors.white : AppColors.textPrimary,
-          ),
-        ),
-        selected: isSelected,
-        selectedColor: AppColors.primary,
-        backgroundColor: AppColors.panel,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        onSelected: (val) {
-          if (val) setState(() => _selectedCity = city);
-        },
-      ),
-    );
-  }
-
-  Widget _buildStationCard(
-    DatChargeStation station,
-    double userLat,
-    double userLng,
-    double kmLeft,
-  ) {
-    final distanceKm = ChargingRouterService.calculateDistanceKm(
-      lat1: userLat,
-      lon1: userLng,
-      lat2: station.latitude,
-      lon2: station.longitude,
-    );
-
-    final reachability = ChargingRouterService.evaluateReachability(
-      distanceKm: distanceKm,
-      kmLeft: kmLeft,
-    );
-
-    final reachColor = Color(reachability.colorValue);
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Panel(
-        padding: const EdgeInsets.all(16),
-        borderRadius: 20,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        station.name,
-                        style: GoogleFonts.spaceGrotesk(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        station.address,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 12,
-                          color: AppColors.textDim,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: station.powerKw >= 4.0
-                        ? AppColors.secondary.withValues(alpha: 0.12)
-                        : AppColors.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${station.powerKw.toStringAsFixed(1)} kW',
-                    style: GoogleFonts.spaceGrotesk(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                      color: station.powerKw >= 4.0 ? AppColors.secondary : AppColors.primary,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            const Divider(color: AppColors.panelBorder, height: 1),
-            const SizedBox(height: 10),
-
-            // Tiện ích & Thông số trạm
-            Row(
-              children: [
-                Icon(Icons.ev_station_rounded, size: 16, color: reachColor),
-                const SizedBox(width: 4),
-                Text(
-                  '${station.availablePorts}/${station.totalPorts} cổng trống',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Icon(Icons.directions_bike_rounded, size: 16, color: reachColor),
-                const SizedBox(width: 4),
-                Text(
-                  '${distanceKm.toStringAsFixed(1)} km',
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  reachability.label,
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: reachColor,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            // Nút bấm chỉ đường Google Maps
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(vertical: 10),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                ),
-                icon: const Icon(Icons.navigation_rounded, size: 16),
-                label: Text(
-                  'Chỉ đường Google Maps',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                onPressed: () => ChargingRouterService.launchGoogleMaps(
-                  station.latitude,
-                  station.longitude,
-                  station.name,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

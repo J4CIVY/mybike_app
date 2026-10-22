@@ -1,13 +1,14 @@
 // Bác Sĩ Pin & Chẩn Đoán Lỗi OBD — Động cơ phân tích chuyên sâu cho xe Dat Bike.
 //
-// 1. Phân tích 20/24 cell pin: Vmax, Vmin, Vavg, Delta V (mV), phân cấp cân bằng cell.
+// 1. Phân tích cell pin: Vmax, Vmin, Vavg, Delta V (mV), phân cấp cân bằng cell từ BMS thực tế.
 // 2. Bản đồ nhiệt độ 3 điểm: Motor, Inverter/ECU, Battery Pack/BMS.
-// 3. Hệ thống mã lỗi OBD: Quét 8 cờ bitmask lỗi phần cứng + hướng dẫn khắc phục.
+// 3. Hệ thống mã lỗi OBD: Giải mã chuẩn VESC mc_fault_code Enum từ ECU & giám sát phần cứng an toàn.
 
 import 'dart:math';
 import '../proto/bike_log.dart';
 
 enum CellBalanceGrade {
+  unknown('Chờ telemetry BMS', 'Chưa nhận được gói tin chi tiết điện áp từng cell từ BMS xe.'),
   excellent('Hoàn hảo', 'Độ lệch áp cực thấp, các cell đồng đều tuyệt đối.'),
   good('Tốt', 'Khối pin cân bằng tốt, hiệu suất xả nạp tối ưu.'),
   fair('Cần theo dõi', 'Có độ lệch áp nhẹ giữa các cell, nên sạc đầy để BMS cân bằng.'),
@@ -76,7 +77,7 @@ class ThermalZone {
 }
 
 class ObdDiagnosticItem {
-  final int bit;
+  final int id;
   final String name;
   final String code;
   final bool isHealthy;
@@ -85,7 +86,7 @@ class ObdDiagnosticItem {
   final String recommendation;
 
   const ObdDiagnosticItem({
-    required this.bit,
+    required this.id,
     required this.name,
     required this.code,
     required this.isHealthy,
@@ -118,6 +119,7 @@ class BatteryHealthReport {
   final int safetyScore; // 0-100
   final bool isSimulated;
   final String packConfigName;
+  final int rawErrorCode;
 
   const BatteryHealthReport({
     required this.cellVoltages,
@@ -141,7 +143,8 @@ class BatteryHealthReport {
     required this.obdItems,
     required this.safetyScore,
     this.isSimulated = false,
-    this.packConfigName = '23S6P (23 Cell)',
+    this.packConfigName = 'Đang chờ BMS...',
+    this.rawErrorCode = 0,
   });
 }
 
@@ -162,83 +165,81 @@ class BatteryDiagnosticsService {
 
     if (battery != null && battery.cellVols.isNotEmpty) {
       // 1. DỮ LIỆU THỰC TẾ TỪ BLUETOOTH BMS (Single Source of Truth)
-      // Bluetooth gửi bao nhiêu cell thì hiển thị bấy nhiêu cell, hoàn toàn tự động 100%!
+      // Hiển thị chính xác số cell thực tế nhận được từ BMS xe.
       cells = List<double>.from(battery.cellVols);
       isSimulated = false;
-      packConfig = '${cells.length}S (${cells.length} Cell nối tiếp)';
+      packConfig = '${cells.length}S (${cells.length} Cell)';
     } else {
-      // 2. Chế độ dự phòng khi offline (chưa nhận được bản tin BMS từ Bluetooth):
-      // Ước lượng số cell theo điện áp thực tế của xe (Li-ion 3.7V nominal):
-      // - Dải điện áp 78V - 96.6V: Hệ 23S (Quantum S, Weaver 200, Weaver++)
-      // - Dải điện áp 60V - 78V: Hệ 20S (Weaver 1.0 cũ)
+      // 2. Khi offline hoặc xe chưa truyền bản tin BMS:
+      // Không bịa số cell, không dùng hàm sin/cos tạo sóng giả.
+      cells = const [];
       isSimulated = true;
-      final int fallbackCellCount;
-      if (packVoltage >= 78.0) {
-        fallbackCellCount = 23;
-      } else if (packVoltage >= 55.0 && packVoltage < 78.0) {
-        fallbackCellCount = 20;
-      } else {
-        fallbackCellCount = 23; // Mặc định chuẩn thế hệ xe Dat Bike mới
-      }
-
-      if (packVoltage > 20.0) {
-        final baseV = packVoltage / fallbackCellCount;
-        // Mô phỏng nhẹ độ lệch tự nhiên giữa các cell (±4mV) khi chưa có tín hiệu Bluetooth
-        cells = List.generate(fallbackCellCount, (i) {
-          final variance = sin(i * 1.5) * 0.006 + cos(i * 0.8) * 0.003;
-          return double.parse((baseV + variance).toStringAsFixed(3));
-        });
-      } else {
-        cells = List.generate(fallbackCellCount, (_) => 3.700);
-      }
-      packConfig = '$fallbackCellCount S ($fallbackCellCount Cell)';
+      packConfig = 'Đang chờ BMS...';
     }
 
-    // 2. Tính toán Vmax, Vmin, Vavg, Delta V
-    double vMax = cells.first;
-    int maxIdx = 1;
-    double vMin = cells.first;
-    int minIdx = 1;
-    double sum = 0.0;
-
-    for (int i = 0; i < cells.length; i++) {
-      final v = cells[i];
-      sum += v;
-      if (v > vMax) {
-        vMax = v;
-        maxIdx = i + 1;
-      }
-      if (v < vMin) {
-        vMin = v;
-        minIdx = i + 1;
-      }
-    }
-
-    final avgV = cells.isNotEmpty ? (sum / cells.length) : 0.0;
-    final deltaMv = (vMax - vMin) * 1000.0;
-
-    // 3. Đánh giá cấp độ cân bằng cell
+    final double vMax;
+    final int maxIdx;
+    final double vMin;
+    final int minIdx;
+    final double avgV;
+    final double deltaMv;
     final CellBalanceGrade grade;
-    if (deltaMv <= 20.0) {
-      grade = CellBalanceGrade.excellent;
-    } else if (deltaMv <= 45.0) {
-      grade = CellBalanceGrade.good;
-    } else if (deltaMv <= 80.0) {
-      grade = CellBalanceGrade.fair;
-    } else if (deltaMv <= 120.0) {
-      grade = CellBalanceGrade.poor;
+
+    if (cells.isNotEmpty) {
+      double maxVal = cells.first;
+      int mIdx = 1;
+      double minVal = cells.first;
+      int nIdx = 1;
+      double sum = 0.0;
+
+      for (int i = 0; i < cells.length; i++) {
+        final v = cells[i];
+        sum += v;
+        if (v > maxVal) {
+          maxVal = v;
+          mIdx = i + 1;
+        }
+        if (v < minVal) {
+          minVal = v;
+          nIdx = i + 1;
+        }
+      }
+      vMax = maxVal;
+      maxIdx = mIdx;
+      vMin = minVal;
+      minIdx = nIdx;
+      avgV = sum / cells.length;
+      deltaMv = (vMax - vMin) * 1000.0;
+
+      if (deltaMv <= 20.0) {
+        grade = CellBalanceGrade.excellent;
+      } else if (deltaMv <= 45.0) {
+        grade = CellBalanceGrade.good;
+      } else if (deltaMv <= 80.0) {
+        grade = CellBalanceGrade.fair;
+      } else if (deltaMv <= 120.0) {
+        grade = CellBalanceGrade.poor;
+      } else {
+        grade = CellBalanceGrade.critical;
+      }
     } else {
-      grade = CellBalanceGrade.critical;
+      vMax = 0.0;
+      maxIdx = 0;
+      vMin = 0.0;
+      minIdx = 0;
+      avgV = 0.0;
+      deltaMv = 0.0;
+      grade = CellBalanceGrade.unknown;
     }
 
-    // 4. Ước lượng SOH (State of Health)
+    // Ước lượng SOH (State of Health)
     final cycles = battery?.socCycles.round() ?? (telemetry != null ? (telemetry.odo / 150.0).round() : 0);
     int health = 100 - (cycles * 0.03).round();
     if (deltaMv > 80) health -= 5;
     if (deltaMv > 120) health -= 10;
     health = health.clamp(60, 100);
 
-    // 5. Bản đồ nhiệt 3 điểm
+    // Bản đồ nhiệt 3 điểm
     final motorZone = ThermalZone.evaluate(
       name: 'Động cơ (Motor)',
       temp: telemetry?.motor ?? 32.0,
@@ -260,11 +261,11 @@ class BatteryDiagnosticsService {
       criticalTemp: 58.0,
     );
 
-    // 6. Quét & Giải mã mã lỗi hệ thống OBD
+    // Quét & Giải mã mã lỗi hệ thống OBD theo chuẩn VESC Fault Code
     final errorCode = telemetry?.error ?? 0;
-    final obdItems = _evaluateObdSystems(errorCode, battery);
+    final obdItems = _evaluateObdSystems(errorCode, telemetry, battery, packVoltage);
 
-    // Điểm an toàn vận hành (100 - 20 cho mỗi lỗi đang xuất hiện)
+    // Điểm an toàn vận hành
     final activeErrors = obdItems.where((item) => !item.isHealthy).length;
     final safetyScore = max(0, 100 - (activeErrors * 25));
 
@@ -291,114 +292,155 @@ class BatteryDiagnosticsService {
       safetyScore: safetyScore,
       isSimulated: isSimulated,
       packConfigName: packConfig,
+      rawErrorCode: errorCode,
     );
   }
 
-  static List<ObdDiagnosticItem> _evaluateObdSystems(int errorCode, BatteryLogMsg? battery) {
+  /// Giải mã mã lỗi phần cứng: Phối hợp chuẩn VESC mc_fault_code Enum và Telemetry xe thực tế
+  static List<ObdDiagnosticItem> _evaluateObdSystems(
+    int errorCode,
+    BikeLogMsg? telemetry,
+    BatteryLogMsg? battery,
+    double packVoltage,
+  ) {
+    // VESC mc_fault_code enumeration:
+    // 0: FAULT_CODE_NONE
+    // 1: FAULT_CODE_OVER_VOLTAGE
+    // 2: FAULT_CODE_UNDER_VOLTAGE
+    // 3: FAULT_CODE_DRV
+    // 4: FAULT_CODE_ABS_OVER_CURRENT
+    // 5: FAULT_CODE_OVER_TEMP_FET
+    // 6: FAULT_CODE_OVER_TEMP_MOTOR
+    // 7: FAULT_CODE_GATE_DRIVER_OVER_VOLTAGE
+    // 8: FAULT_CODE_GATE_DRIVER_UNDER_VOLTAGE
+    // 9: FAULT_CODE_MCU_UNDER_VOLTAGE
+    // 10: FAULT_CODE_BOOTING_FROM_WATCHDOG_RESET
+    // 11: FAULT_CODE_ENCODER_SPI
+    // 12: FAULT_CODE_ENCODER_SINCOS_BELOW_MIN_AMPLITUDE
+    // 13: FAULT_CODE_ENCODER_SINCOS_ABOVE_MAX_AMPLITUDE
+    // 14: FAULT_CODE_FLASH_CORRUPTION
+    // 15: FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_1
+    // 16: FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_2
+    // 17: FAULT_CODE_HIGH_OFFSET_CURRENT_SENSOR_3
+    // 18: FAULT_CODE_UNBALANCED_CURRENTS
+    // 19: FAULT_CODE_BRK
+    // 20: FAULT_CODE_RESOLVER_LOT
+    // 21: FAULT_CODE_RESOLVER_DOS
+    // 22: FAULT_CODE_RESOLVER_LOS
+
+    final bool isDrvFault = errorCode == 3;
+    final bool isOverCurrent = errorCode == 4 || errorCode == 18;
+    final bool isEcuOverTemp = errorCode == 5 || (telemetry != null && telemetry.ecu > 75.0);
+    final bool isMotorOverTemp = errorCode == 6 || (telemetry != null && telemetry.motor > 85.0);
+    final bool isOverVoltage = errorCode == 1;
+    final bool isUnderVoltage = errorCode == 2 || (packVoltage > 0.0 && packVoltage < 65.0);
+    final bool isBmsOverTemp = battery != null && battery.ntcs.any((t) => t > 55.0);
+    final bool isSensorFault = errorCode == 11 || errorCode == 12 || errorCode == 13 || errorCode == 20 || errorCode == 21 || errorCode == 22;
+
     return [
       ObdDiagnosticItem(
-        bit: 0,
-        name: 'Cảm biến tay ga (Throttle)',
-        code: 'OBD-TH-01',
-        isHealthy: (errorCode & (1 << 0)) == 0,
-        severity: (errorCode & (1 << 0)) != 0 ? 'Khẩn cấp' : 'Tốt',
-        description: (errorCode & (1 << 0)) != 0
-            ? 'Tín hiệu điện áp tay ga vượt ngưỡng an toàn (đứt dây hoặc kẹt cảm biến Hall tay ga).'
-            : 'Tín hiệu Hall tay ga phản hồi mượt mà, dải điện áp 0.8V – 4.2V chuẩn xác.',
-        recommendation: (errorCode & (1 << 0)) != 0
-            ? 'Kiểm tra giắc cắm cùm ga bên phải. Thử nhả tay ga hoàn toàn rồi bật lại xe.'
-            : 'Hệ thống điều khiển ga đang ở trạng thái hoàn hảo.',
+        id: 1,
+        name: 'IC Lái Cổng Công Suất (DRV)',
+        code: 'VESC-FAULT-03',
+        isHealthy: !isDrvFault,
+        severity: isDrvFault ? 'Khẩn cấp' : 'Tốt',
+        description: isDrvFault
+            ? 'Phát hiện lỗi phần cứng IC lái cổng MOSFET (DRV830x). Biến tần đã tự ngắt để tránh nổ transistor.'
+            : 'Mạch lái xung MOSFET hoạt động chính xác, điện áp kích cổng ổn định.',
+        recommendation: isDrvFault
+            ? 'Tắt nguồn xe ngay lập tức. Đưa xe về Dat Bike Store hoặc trạm dịch vụ để kiểm tra bo mạch ECU.'
+            : 'Mạch công suất hoạt động hoàn hảo.',
       ),
       ObdDiagnosticItem(
-        bit: 1,
-        name: 'Cảm biến Hall Động cơ',
-        code: 'OBD-MOT-02',
-        isHealthy: (errorCode & (1 << 1)) == 0,
-        severity: (errorCode & (1 << 1)) != 0 ? 'Khẩn cấp' : 'Tốt',
-        description: (errorCode & (1 << 1)) != 0
-            ? 'Bộ điều khiển mất tín hiệu góc quay từ 3 cảm biến Hall trong động cơ.'
-            : 'Tín hiệu pha động cơ 3 pha đồng bộ chính xác, không phát hiện mất bước.',
-        recommendation: (errorCode & (1 << 1)) != 0
-            ? 'Không tiếp tục vặn ga ép tải. Cần kiểm tra bó dây động cơ bánh sau và giắc Hall 5 chân.'
-            : 'Hệ thống truyền động hoạt động ổn định.',
-      ),
-      ObdDiagnosticItem(
-        bit: 2,
-        name: 'Bảo vệ quá dòng (Over-Current)',
-        code: 'OBD-PWR-03',
-        isHealthy: (errorCode & (1 << 2)) == 0,
-        severity: (errorCode & (1 << 2)) != 0 ? 'Khẩn cấp' : 'Tốt',
-        description: (errorCode & (1 << 2)) != 0
-            ? 'Dòng xả tức thời vượt ngưỡng giới hạn an toàn của biến tần (>300A).'
+        id: 2,
+        name: 'Bảo Vệ Quá Dòng (Over-Current)',
+        code: 'VESC-FAULT-04',
+        isHealthy: !isOverCurrent,
+        severity: isOverCurrent ? 'Khẩn cấp' : 'Tốt',
+        description: isOverCurrent
+            ? 'Dòng xả tức thời vượt ngưỡng giới hạn tuyệt đối của biến tần VESC (>350A).'
             : 'Dòng tải nằm trong giới hạn thiết kế an toàn của bo công suất MOSFET.',
-        recommendation: (errorCode & (1 << 2)) != 0
-            ? 'Dừng xe, đợi 2 phút để tụ xả xả bớt năng lượng. Tránh chở quá tải trọng thiết kế.'
-            : 'Bộ điều tốc VESC hoạt động đúng định mức.',
+        recommendation: isOverCurrent
+            ? 'Dừng xe, đợi 2 phút. Tránh kéo ga thốc đột ngột khi xe đang chở quá tải hoặc leo dốc gắt.'
+            : 'Bộ điều tốc hoạt động đúng định mức tải.',
       ),
       ObdDiagnosticItem(
-        bit: 3,
-        name: 'Cảm biến nhiệt ECU/Inverter',
-        code: 'OBD-ECU-04',
-        isHealthy: (errorCode & (1 << 3)) == 0,
-        severity: (errorCode & (1 << 3)) != 0 ? 'Cảnh báo' : 'Tốt',
-        description: (errorCode & (1 << 3)) != 0
-            ? 'Nhiệt độ bo điều khiển ECU vượt ngưỡng an toàn (>80°C), công suất bị giới hạn.'
-            : 'Nhiệt độ bo ECU mát mẻ, keo tản nhiệt và quạt làm mát hoạt động hiệu quả.',
-        recommendation: (errorCode & (1 << 3)) != 0
+        id: 3,
+        name: 'Nhiệt Độ Biến Tần ECU',
+        code: 'VESC-TEMP-FET',
+        isHealthy: !isEcuOverTemp,
+        severity: isEcuOverTemp ? 'Cảnh báo' : 'Tốt',
+        description: isEcuOverTemp
+            ? 'Nhiệt độ bo điều khiển ECU vượt ngưỡng an toàn (${telemetry?.ecu.toStringAsFixed(1) ?? "80"}°C), công suất đã bị giới hạn để làm mát.'
+            : 'Nhiệt độ bo ECU mát mẻ (${telemetry?.ecu.toStringAsFixed(1) ?? "30"}°C), keo tản nhiệt và quạt làm mát hiệu quả.',
+        recommendation: isEcuOverTemp
             ? 'Giảm tốc độ, tránh ép ga liên tục. Cho xe nghỉ ở nơi thoáng mát 10-15 phút.'
             : 'Tản nhiệt ECU tối ưu.',
       ),
       ObdDiagnosticItem(
-        bit: 4,
-        name: 'Giao tiếp mạng CAN/BMS',
-        code: 'OBD-COM-05',
-        isHealthy: (errorCode & (1 << 4)) == 0,
-        severity: (errorCode & (1 << 4)) != 0 ? 'Khẩn cấp' : 'Tốt',
-        description: (errorCode & (1 << 4)) != 0
-            ? 'Mất liên lạc giữa ECU trung tâm và bo mạch quản lý pin thông minh BMS.'
-            : 'Đường truyền dữ liệu CAN Bus 250kbps ổn định, không có gói tin thất lạc.',
-        recommendation: (errorCode & (1 << 4)) != 0
-            ? 'Kiểm tra giắc tín hiệu BMS nối với pack pin dưới cốp xe.'
-            : 'BMS phản hồi dữ liệu liên tục.',
+        id: 4,
+        name: 'Nhiệt Độ Động Cơ (Motor)',
+        code: 'VESC-TEMP-MOT',
+        isHealthy: !isMotorOverTemp,
+        severity: isMotorOverTemp ? 'Cảnh báo' : 'Tốt',
+        description: isMotorOverTemp
+            ? 'Cảm biến nhiệt phát hiện cuộn dây động cơ bánh sau quá nóng (${telemetry?.motor.toStringAsFixed(1) ?? "85"}°C).'
+            : 'Nhiệt độ động cơ trong ngưỡng lý tưởng (${telemetry?.motor.toStringAsFixed(1) ?? "32"}°C).',
+        recommendation: isMotorOverTemp
+            ? 'Dừng xe nghỉ để động cơ giảm nhiệt độ trước khi tiếp tục hành trình dài.'
+            : 'Hệ thống truyền động motor hoạt động bền bỉ.',
       ),
       ObdDiagnosticItem(
-        bit: 5,
-        name: 'Nhiệt độ khối Cell Pin',
-        code: 'OBD-BAT-06',
-        isHealthy: (errorCode & (1 << 5)) == 0,
-        severity: (errorCode & (1 << 5)) != 0 ? 'Khẩn cấp' : 'Tốt',
-        description: (errorCode & (1 << 5)) != 0
-            ? 'Cảm biến NTC phát hiện nhiệt độ pack pin vượt ngưỡng nguy hại (>55°C).'
-            : 'Nhiệt độ toàn bộ khối cell pin đồng đều và nằm trong vùng tối ưu hóa tuổi thọ.',
-        recommendation: (errorCode & (1 << 5)) != 0
-            ? 'CẢNH BÁO: Tắt nguồn ngay! Không cắm sạc khi pin đang quá nhiệt.'
-            : 'Điều kiện môi trường pin lý tưởng.',
-      ),
-      ObdDiagnosticItem(
-        bit: 6,
-        name: 'Bảo vệ điện áp thấp (Low Voltage)',
-        code: 'OBD-VOLT-07',
-        isHealthy: (errorCode & (1 << 6)) == 0,
-        severity: (errorCode & (1 << 6)) != 0 ? 'Cảnh báo' : 'Tốt',
-        description: (errorCode & (1 << 6)) != 0
-            ? 'Điện áp pack pin tụt dưới ngưỡng cắt bảo vệ, xe chuyển sang chế độ bảo tồn (Rùa).'
-            : 'Điện áp ổn định, không có hiện tượng sụt áp sâu dưới tải nặng.',
-        recommendation: (errorCode & (1 << 6)) != 0
+        id: 5,
+        name: 'Điện Áp Thấp / Cạn Bình (Under-Voltage)',
+        code: 'VESC-FAULT-02',
+        isHealthy: !isUnderVoltage,
+        severity: isUnderVoltage ? 'Cảnh báo' : 'Tốt',
+        description: isUnderVoltage
+            ? 'Điện áp pack pin tụt dưới ngưỡng cắt bảo vệ (${packVoltage.toStringAsFixed(1)}V), xe chuyển sang chế độ bảo tồn (Rùa).'
+            : 'Điện áp ổn định (${packVoltage.toStringAsFixed(1)}V), không có hiện tượng sụt áp sâu.',
+        recommendation: isUnderVoltage
             ? 'Cần cắm sạc ngay. Tránh để xe kiệt pin dưới 0% trong thời gian dài.'
-            : 'Điện áp cung cấp dồi dào.',
+            : 'Nguồn điện cung cấp dồi dào.',
       ),
       ObdDiagnosticItem(
-        bit: 7,
-        name: 'Công tắc ngắt phanh (Brake Cutoff)',
-        code: 'OBD-BRK-08',
-        isHealthy: (errorCode & (1 << 7)) == 0,
-        severity: (errorCode & (1 << 7)) != 0 ? 'Cảnh báo' : 'Tốt',
-        description: (errorCode & (1 << 7)) != 0
-            ? 'Công tắc vi mô ở tay thắng bị kẹt đóng, xe tự ngắt ga an toàn.'
-            : 'Cảm biến hành trình tay phanh đóng/ngắt chuẩn xác theo nhịp bóp phanh.',
-        recommendation: (errorCode & (1 << 7)) != 0
-            ? 'Kiểm tra độ rơ của tay phanh trái và phải. Tra dầu bôi trơn công tắc nếu bị kẹt dính.'
-            : 'Hệ thống phanh tái sinh và ngắt ga hoạt động an toàn.',
+        id: 6,
+        name: 'Điện Áp Cao Bất Thường (Over-Voltage)',
+        code: 'VESC-FAULT-01',
+        isHealthy: !isOverVoltage,
+        severity: isOverVoltage ? 'Khẩn cấp' : 'Tốt',
+        description: isOverVoltage
+            ? 'Điện áp ngõ vào vượt quá giới hạn cực đại (>98V), thường do phanh tái sinh RECUP khi pin đang đầy 100%.'
+            : 'Điện áp bus nằm trong ngưỡng an toàn tuyệt đối.',
+        recommendation: isOverVoltage
+            ? 'Hạn chế sử dụng phanh tái sinh liên tục khi pin vừa sạc đầy 100% khi đổ dốc.'
+            : 'Hệ thống điều hòa điện áp bus hoạt động tin cậy.',
+      ),
+      ObdDiagnosticItem(
+        id: 7,
+        name: 'Cảm Biến Vị Trí Góc Quay / Encoder',
+        code: 'VESC-FAULT-ENC',
+        isHealthy: !isSensorFault,
+        severity: isSensorFault ? 'Khẩn cấp' : 'Tốt',
+        description: isSensorFault
+            ? 'ECU mất tín hiệu hoặc biên độ sin/cos góc quay từ cảm biến động cơ không chuẩn.'
+            : 'Tín hiệu góc quay FOC đồng bộ chính xác, không phát hiện mất bước.',
+        recommendation: isSensorFault
+            ? 'Kiểm tra giắc cắm encoder động cơ bánh sau và bó dây tín hiệu.'
+            : 'Hệ thống định vị góc quay rotor chính xác.',
+      ),
+      ObdDiagnosticItem(
+        id: 8,
+        name: 'Cảm Biến Nhiệt Pack Pin (BMS NTC)',
+        code: 'BMS-TEMP-NTC',
+        isHealthy: !isBmsOverTemp,
+        severity: isBmsOverTemp ? 'Khẩn cấp' : 'Tốt',
+        description: isBmsOverTemp
+            ? 'Cảm biến NTC phát hiện nhiệt độ pack pin vượt ngưỡng nguy hại (>55°C).'
+            : 'Nhiệt độ khối cell pin đồng đều và nằm trong vùng tối ưu hóa tuổi thọ.',
+        recommendation: isBmsOverTemp
+            ? 'CẢNH BÁO: Tắt nguồn ngay! Không cắm sạc khi pin đang quá nhiệt.'
+            : 'Điều kiện môi trường cell pin lý tưởng.',
       ),
     ];
   }

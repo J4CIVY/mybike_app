@@ -290,25 +290,32 @@ class BleController extends Notifier<BleState> {
     state = state.copyWith(findBikePattern: val);
   }
 
+  /// Lưu hồ sơ mức phanh tái sinh RECUP cá nhân trên ứng dụng.
+  /// LƯU Ý: Firmware v1.14.0 hiện tại chưa hỗ trợ ghi cấu hình RECUP qua BLE xuống xe.
   Future<void> setRecupLevel(int val) async {
     final prefs = await _prefs;
     await prefs.setInt(_kRecupLevel, val);
     state = state.copyWith(recupLevel: val);
-    BleLogger.instance.event('recup_level_set', {'level': val});
+    BleLogger.instance.event('driver_profile_recup_set_local', {'level': val});
   }
 
+  /// Lưu hồ sơ độ nhạy tay ga cá nhân trên ứng dụng.
+  /// LƯU Ý: Firmware v1.14.0 hiện tại chưa hỗ trợ ghi cấu hình bướm ga qua BLE xuống xe.
   Future<void> setThrottleResponse(int val) async {
     final prefs = await _prefs;
     await prefs.setInt(_kThrottleResponse, val);
     state = state.copyWith(throttleResponse: val);
-    BleLogger.instance.event('throttle_response_set', {'response': val});
+    BleLogger.instance.event('driver_profile_throttle_set_local', {'response': val});
   }
 
+  /// Lưu hồ sơ giới hạn tốc độ khuyến nghị cá nhân trên ứng dụng.
+  /// CẢNH BÁO: Firmware v1.14.0 KHÔNG hỗ trợ khóa tốc độ xe từ Bluetooth!
+  /// Cài đặt này chỉ mang tính tham khảo trên giao diện và KHÔNG hãm tốc độ thực tế của xe.
   Future<void> setSpeedLimitMode(int val) async {
     final prefs = await _prefs;
     await prefs.setInt(_kSpeedLimitMode, val);
     state = state.copyWith(speedLimitMode: val);
-    BleLogger.instance.event('speed_limit_set', {'mode': val});
+    BleLogger.instance.event('driver_profile_speed_mode_set_local', {'mode': val});
   }
 
   Future<String?> readDeviceSerial() async {
@@ -1341,7 +1348,7 @@ class BleController extends Notifier<BleState> {
     _findBikeTimeoutTimer?.cancel();
     _findBikePeriodicTimer?.cancel();
 
-    state = state.copyWith(isFindingBike: true, message: 'Đang phát tín hiệu tìm xe (hú còi)...');
+    state = state.copyWith(isFindingBike: true, message: 'Đang thử nghiệm phát tín hiệu còi tìm xe...');
     BleLogger.instance.event('find_bike_start', {
       'timeout_s': timeout.inSeconds,
       'pattern': state.findBikePattern,
@@ -1386,7 +1393,7 @@ class BleController extends Notifier<BleState> {
       2 => 'Báo động dồn dập',
       _ => 'Tiêu chuẩn',
     };
-    return 'Đang phát tín hiệu tìm xe ($patName) trong ${timeout.inSeconds} giây...';
+    return 'Đang thử nghiệm phát tín hiệu còi xe ($patName) trong ${timeout.inSeconds}s (Alert Service)...';
   }
 
   /// Dừng phát tín hiệu tìm xe.
@@ -1415,43 +1422,10 @@ class BleController extends Notifier<BleState> {
     //    và các characteristic phụ (07765f94, 68311857, 46a7b351, 4244dedb).
 
     final dataAscii = val.codeUnits; // [0x31] ('1') hoặc [0x30] ('0')
-    final dataByte = [val == '1' ? 1 : 0]; // [1] hoặc [0]
     bool sentSuccess = false;
 
-    // 1. Ghi lên Characteristic chính Find Bike / Beep Active (350d9a82):
-    for (final c in state.characteristics) {
-      final uuid = c.uuid.str128.toLowerCase();
-      if (uuid == Gatt.findBikeChar.toLowerCase()) {
-        try {
-          await c.write(dataAscii, withoutResponse: false);
-          BleLogger.instance.event('find_bike_primary_success', {
-            'target': c.uuid.str128,
-            'val': val,
-            'mode': 'ascii_with_resp',
-          });
-          sentSuccess = true;
-        } catch (e) {
-          try {
-            await c.write(dataByte, withoutResponse: false);
-            BleLogger.instance.event('find_bike_primary_byte_success', {
-              'target': c.uuid.str128,
-              'val': val,
-            });
-            sentSuccess = true;
-          } catch (e2) {
-            try {
-              await c.write(dataAscii, withoutResponse: true);
-              sentSuccess = true;
-            } catch (e3) {
-              BleLogger.instance.event('find_bike_primary_err', {
-                'target': c.uuid.str128,
-                'error': '$e / $e2 / $e3',
-              });
-            }
-          }
-        }
-      }
-    }
+    // TUYỆT ĐỐI KHÔNG ghi vào 350d9a82 (powerSwitchChar) vì đây là công tắc nguồn xe!
+    // Ghi thử nghiệm vào Alert / Beep Service 5b6d1069:
 
     // Delay nhỏ 100ms giữa các service để CAN bus/MCU xử lý êm
     await Future.delayed(const Duration(milliseconds: 100));
@@ -1782,7 +1756,7 @@ class BleController extends Notifier<BleState> {
       // app mình TỰ ĐĂNG KÝ password của mình (đúng flow app gốc).
       final saltNonce = nonce15;
       final dash = find(Gatt.dashboardCharacteristic);
-      final timeChar = find(Gatt.currentTimeChar);
+      final serialChar = find(Gatt.bikeSerial);
       int ctr(List<int> r) => r.length >= 4
           ? r[0] | (r[1] << 8) | (r[2] << 16) | (r[3] << 24)
           : -1;
@@ -1793,18 +1767,16 @@ class BleController extends Notifier<BleState> {
           pairingToken: token, password: pw, challenge: salt);
         BleLogger.instance.event('auto_handshake_try_password',
             {'candidate': label, 'key8': BleLogger.hex(sk.sublist(0, 8))});
-        if (timeChar != null) {
-          final nowUtc = DateTime.now().toUtc();
-          final totalSec = (nowUtc.hour * 3600) + (nowUtc.minute * 60) + nowUtc.second;
+        if (serialChar != null) {
           final frame = BikeSessionCrypto.buildProtectedWrite(
             sessionKey: sk,
             counter: _writeCounter++,
-            characteristicUuid: Gatt.currentTimeChar,
-            data: utf8.encode(totalSec.toString()),
+            characteristicUuid: Gatt.bikeSerial,
+            data: pw.codeUnits,
           );
-          await timeChar.write(frame, withoutResponse: false);
-          BleLogger.instance.event('auto_handshake_time_sent',
-              {'candidate': label, 'secondsUtc': totalSec, 'hex': BleLogger.hex(frame)});
+          await serialChar.write(frame, withoutResponse: false);
+          BleLogger.instance.event('auto_handshake_pin_sent',
+              {'candidate': label, 'hex': BleLogger.hex(frame)});
         }
         if (dash == null) return false;
         try {
@@ -1943,22 +1915,14 @@ class BleController extends Notifier<BleState> {
           await sessionUuidChar.write(token.codeUnits, withoutResponse: false);
           BleLogger.instance.event('auto_handshake_uuid_sent', {'token': token});
         }
-        if (timeChar != null) {
-          final nowLocal = DateTime.now();
-          final nowUtc = nowLocal.toUtc();
-          final totalSec = (nowUtc.hour * 3600) + (nowUtc.minute * 60) + nowUtc.second;
+        if (serialChar != null) {
           final frame2 = BikeSessionCrypto.buildProtectedWrite(
             sessionKey: liveKey,
             counter: _writeCounter++,
-            characteristicUuid: Gatt.currentTimeChar,
-            data: utf8.encode(totalSec.toString()),
+            characteristicUuid: Gatt.bikeSerial,
+            data: livePw.codeUnits,
           );
-          await timeChar.write(frame2, withoutResponse: false);
-          state = state.copyWith(lastTimeSynced: nowLocal);
-          BleLogger.instance.event('auto_handshake_clock_synced', {
-            'secondsUtc': totalSec,
-            'timeLocal': nowLocal.toIso8601String(),
-          });
+          await serialChar.write(frame2, withoutResponse: false);
         }
         _sessionKey = liveKey;
         _activePassword = livePw;
@@ -1969,6 +1933,9 @@ class BleController extends Notifier<BleState> {
           message: 'SESSION HỢP LỆ — password '
               '"$livePw" sẵn sàng điều khiển',
         );
+
+        // Sau khi session đã xác thực THÀNH CÔNG, đồng bộ giờ vào Taplo xe
+        unawaited(syncTimeWithBike());
       } else {
         _sessionKey = null;
         _stopKeepalive();
