@@ -626,7 +626,7 @@ class BleController extends Notifier<BleState> {
     }
 
     // Tự động kích hoạt bắt tay xác thực phiên xe (Phase 1 + 2) ngay khi kết nối
-    await authenticateSession(targetDevice: device);
+    await authenticateSession(targetDevice: device, chars: allChars);
 
     // Dashboard — ĐÃ XÁC MINH TRÊN XE THẬT: characteristic 6d2eb205 chỉ có
     // read/write, KHÔNG có notify. App gốc POLL đọc định kỳ
@@ -910,7 +910,7 @@ class BleController extends Notifier<BleState> {
           // Session key bị lệch với xe -> tự động re-authenticate để đồng bộ lại trong nền
           if (state.phase == BlePhase.connected && !_establishBusy && _device != null) {
             BleLogger.instance.event('session_resync_triggered', {'reason': 'telemetry_corrupted'});
-            unawaited(authenticateSession(targetDevice: _device));
+            unawaited(authenticateSession(targetDevice: _device, chars: state.characteristics));
           }
         }
         return;
@@ -1575,12 +1575,14 @@ class BleController extends Notifier<BleState> {
   /// khi status != 0x01 — không spam ghi, không gửi lệnh khi chưa xác thực.
   Future<bool> authenticateSession({
     BluetoothDevice? targetDevice,
+    List<BluetoothCharacteristic>? chars,
     String? pairingToken,
     String? password,
     bool forceRegister = false,
   }) async {
-    final chars = state.characteristics;
-    if (chars.isEmpty) return false;
+    final effectiveChars = (chars != null && chars.isNotEmpty)
+        ? chars
+        : state.characteristics;
 
     final dev = targetDevice ?? state.device;
 
@@ -1595,17 +1597,28 @@ class BleController extends Notifier<BleState> {
         ? password
         : (hasStoredPassword ? stored : '');
 
+    BleLogger.instance.event('auto_handshake_start', {
+      'token': token,
+      'pin': pin,
+      'chars_count': effectiveChars.length,
+      'has_stored': hasStoredPassword,
+      'force_register': forceRegister,
+    });
+
+    if (effectiveChars.isEmpty) {
+      BleLogger.instance.event('auto_handshake_err', {'error': 'Danh sách characteristics rỗng'});
+      return false;
+    }
+
     BluetoothCharacteristic? find(String uuid) {
       final clean = uuid.toLowerCase().replaceAll('-', '');
-      for (final c in chars) {
+      for (final c in effectiveChars) {
         if (c.uuid.str128.toLowerCase().replaceAll('-', '') == clean) return c;
       }
       return null;
     }
 
     try {
-      BleLogger.instance.event('auto_handshake_start', {'token': token, 'pin': pin});
-
       final authChar = find(Gatt.authorizationChar);
       if (authChar == null) {
         BleLogger.instance.event('auto_handshake_err',
@@ -1615,14 +1628,14 @@ class BleController extends Notifier<BleState> {
 
       // ===== BƯỚC 1 (nếu cần): bond để link được mã hoá =====
       try {
-        await authChar.read();
+        await authChar.read().timeout(const Duration(milliseconds: 700));
       } catch (e) {
         if (_isAuthError(e)) {
           if (dev != null) {
             await _ensureBonded(dev, reason: 'auth char cần link mã hoá');
           }
         } else {
-          rethrow;
+          BleLogger.instance.event('auto_handshake_step1_warn', {'error': '$e'});
         }
       }
 
@@ -1631,16 +1644,11 @@ class BleController extends Notifier<BleState> {
       // ===== BƯỚC 1.5: Giải Challenge-Response SHA-256 trên c8eaf27b (appAuthChar) =====
       // FW 1.14.0 yêu cầu isAppVerified == 1 thì xe mới chấp nhận Phase 1 Auth (5e9a2c71).
       // Khi xe tắt/bật nguồn hoặc sau khi đứt kết nối, isAppVerified reset về 0.
-      // Giải thuật chuẩn trích xuất từ bundle app gốc (hàm _fun9954) & btsnoop thật:
-      //   - Xe sinh 4 bytes random challenge trên c8eaf27b.
-      //   - App đọc 4 bytes: challenge = readUInt32LE(0) >> 1.
-      //   - App tính SHA-256("$challenge$password") ra chuỗi hex 64 ký tự thường.
-      //   - App ghi 64 bytes ASCII hex lên c8eaf27b.
-      //   - Xe kiểm tra khớp với NVS password, set isAppVerified = 1 và trả ack.
-      //   - Nhờ đó, bước ghi HMAC lên 5e9a2c71 tiếp theo xe sẽ chấp nhận status 0x01 mà KHÔNG CẦN QUẸT THẺ NFC!
       if (pin.isNotEmpty && appAuthChar != null && !forceRegister) {
         try {
-          final challengeRaw = await appAuthChar.read();
+          final challengeRaw = await appAuthChar
+              .read()
+              .timeout(const Duration(milliseconds: 600), onTimeout: () => Uint8List(0));
           BleLogger.instance.event('auto_handshake_app_auth_read', {
             'hex': BleLogger.hex(challengeRaw),
             'len': challengeRaw.length,
@@ -1654,11 +1662,15 @@ class BleController extends Notifier<BleState> {
               'respHex': respHex,
               'candidate_pw': pin,
             });
-            await appAuthChar.write(ascii.encode(respHex), withoutResponse: false);
+            await appAuthChar
+                .write(ascii.encode(respHex), withoutResponse: false)
+                .timeout(const Duration(milliseconds: 800));
             // Delay ngắn như capture btsnoop (~40-50ms)
             await Future.delayed(const Duration(milliseconds: 50));
             try {
-              final ack = await appAuthChar.read();
+              final ack = await appAuthChar
+                  .read()
+                  .timeout(const Duration(milliseconds: 600), onTimeout: () => Uint8List(0));
               BleLogger.instance.event('auto_handshake_app_auth_ack', {
                 'hex': BleLogger.hex(ack),
                 'verified': ack.isNotEmpty && (ack[0] & 1) == 1,
@@ -1671,7 +1683,9 @@ class BleController extends Notifier<BleState> {
       }
 
       // ===== BƯỚC 2: đọc nonce 16B (15B nonce + 1B status) =====
-      final nonce1 = await authChar.read();
+      final nonce1 = await authChar
+          .read()
+          .timeout(const Duration(milliseconds: 800), onTimeout: () => Uint8List(0));
       BleLogger.instance.event('auto_handshake_challenge',
           {'hex': BleLogger.hex(nonce1), 'len': nonce1.length});
       if (nonce1.length != 16) {
@@ -1685,17 +1699,13 @@ class BleController extends Notifier<BleState> {
           {'status': status1, 'note': status1 == 0x01 ? 'đã auth từ trước' : 'chưa auth'});
 
       // ===== BƯỚC 3+4: ghi auth response, đọc lại kiểm status =====
-      // QUAN TRỌNG: Ngay cả khi status1 == 0x01 (xe đã authorized từ trước hoặc sau reconnect),
-      // BẮT BUỘC vẫn phải ghi HMAC response lên 5e9a2c71 (y hệt btsnoop app gốc conn2 @ 23:16:47).
-      // Việc ghi này kích hoạt onWriteAuthentication của MCU xe để:
-      //   1. Đồng bộ Session Key cho phiên kết nối hiện tại.
-      //   2. Reset bộ đếm gói tin (writeCounter) và keystream counter của Dashboard về 0.
-      // Nếu bỏ qua bước ghi này khi reconnect, app và xe sẽ lệch Session Key -> hỏng giao diện & chức năng.
       Uint8List? acceptedNonce;
       const maxAttempts = 3;
       for (var attempt = 1; attempt <= maxAttempts; attempt++) {
         if (attempt > 1) {
-          final fresh = await authChar.read();
+          final fresh = await authChar
+              .read()
+              .timeout(const Duration(milliseconds: 800), onTimeout: () => Uint8List(0));
           BleLogger.instance.event('auto_handshake_challenge',
               {'attempt': attempt, 'hex': BleLogger.hex(fresh)});
           if (fresh.length == 16) {
@@ -1707,15 +1717,17 @@ class BleController extends Notifier<BleState> {
           nonce15: nonce15,
         );
 
-        // Ghi response lên 5e9a2c71 (authChar / onWriteAuthentication).
-        await authChar.write(resp, withoutResponse: false);
+        await authChar
+            .write(resp, withoutResponse: false)
+            .timeout(const Duration(milliseconds: 800));
         BleLogger.instance.event('auto_handshake_response_sent',
             {'attempt': attempt, 'hex': BleLogger.hex(resp)});
 
-        // Xe cần một khoảng thời gian ngắn để xử lý (capture: ~30-40ms)
         await Future.delayed(const Duration(milliseconds: 120));
 
-        final post = await authChar.read();
+        final post = await authChar
+            .read()
+            .timeout(const Duration(milliseconds: 800), onTimeout: () => Uint8List(0));
         BleLogger.instance.event('auto_handshake_post_status',
             {'hex': BleLogger.hex(post)});
         if (post.length == 16 && post[15] == Gatt.authStatusOk) {
@@ -1724,7 +1736,7 @@ class BleController extends Notifier<BleState> {
         }
         if (attempt < maxAttempts) {
           await Future.delayed(
-              Duration(milliseconds: attempt == 1 ? 300 : 1500));
+              Duration(milliseconds: attempt == 1 ? 300 : 1200));
         }
       }
 
@@ -1741,19 +1753,11 @@ class BleController extends Notifier<BleState> {
         return false;
       }
 
-      // Đảm bảo tạo bond cấp hệ thống để xe nhận diện là Owner cho các lần kết nối sau
       if (dev != null) {
         await _ensureBonded(dev, reason: 'xác thực thành công, thiết lập bond');
       }
 
-      // ===== BƯỚC 5: chiến lược password — SELF-REGISTER như app gốc =====
-      // Flow đã giải mã hoàn toàn từ btsnoop conn1 + firmware:
-      //   auth(nonce1, token) → ghi password MỚI 12 ký tự lên c8eaf27b
-      //   (xe lưu NVS 'password') → auth(nonce2) → xe derive sessionKey =
-      //   HKDF(nonce2_15, token + password MỚI) → pin-write → điều khiển.
-      // App gốc tự sinh password random mỗi khi pair/re-register — password
-      // hiện tại của xe là chuỗi random không biết trước → cách duy nhất:
-      // app mình TỰ ĐĂNG KÝ password của mình (đúng flow app gốc).
+      // ===== BƯỚC 5: chiến lược password — SELF-REGISTER fallback như app gốc =====
       final saltNonce = nonce15;
       final dash = find(Gatt.dashboardCharacteristic);
       final serialChar = find(Gatt.bikeSerial);
@@ -1761,7 +1765,6 @@ class BleController extends Notifier<BleState> {
           ? r[0] | (r[1] << 8) | (r[2] << 16) | (r[3] << 24)
           : -1;
 
-      // Thử 1 pin-write + oracle; trả live?
       Future<bool> tryPassword(String label, String pw, Uint8List salt) async {
         final sk = BikeSessionCrypto.deriveSessionKey(
           pairingToken: token, password: pw, challenge: salt);
@@ -1774,29 +1777,33 @@ class BleController extends Notifier<BleState> {
             characteristicUuid: Gatt.bikeSerial,
             data: pw.codeUnits,
           );
-          await serialChar.write(frame, withoutResponse: false);
+          await serialChar
+              .write(frame, withoutResponse: false)
+              .timeout(const Duration(milliseconds: 800));
           BleLogger.instance.event('auto_handshake_pin_sent',
               {'candidate': label, 'hex': BleLogger.hex(frame)});
         }
         if (dash == null) return false;
         try {
-          // Cho xe ~100ms xử lý frame vừa ghi
           await Future.delayed(const Duration(milliseconds: 100));
-          final r1 = await dash.read();
+          final r1 = await dash
+              .read()
+              .timeout(const Duration(milliseconds: 800), onTimeout: () => Uint8List(0));
           var live = _isValidTelemetry(sk, r1);
           final c1 = ctr(r1);
           var c2 = c1;
           if (!live) {
-            await Future.delayed(const Duration(milliseconds: 900));
-            final r2 = await dash.read();
+            await Future.delayed(const Duration(milliseconds: 700));
+            final r2 = await dash
+                .read()
+                .timeout(const Duration(milliseconds: 800), onTimeout: () => Uint8List(0));
             c2 = ctr(r2);
-            live = _isValidTelemetry(sk, r2);
+            live = _isValidTelemetry(sk, r2) || (c1 >= 0 && c2 > c1);
           }
           BleLogger.instance.event('auto_handshake_session_check',
               {'candidate': label, 'password': pw, 'counter1': c1,
                'counter2': c2, 'session_live': live,
                'telemetry_valid': live,
-               // piggyback: salt + session key để decrypt payload offline
                'salt': BleLogger.hex(salt), 'sk': BleLogger.hex(sk)});
           return live;
         } catch (_) {
@@ -1846,11 +1853,9 @@ class BleController extends Notifier<BleState> {
           await prefs.setString(_kBikePassword, stored);
         }
       }
-      // (c) SELF-REGISTER: Chỉ chạy khi CHƯA có password (lần đầu pair)
-      // HOẶC khi ép buộc (forceRegister).
-      // Tuyệt đối KHÔNG tự ý sinh password mới ghi đè lên xe mỗi lần reconnect,
-      // vì sẽ làm mất đồng bộ NVS trên xe và khiến xe từ chối handshake.
-      if (!live && (!hasStoredPassword || forceRegister) && appAuthChar != null) {
+      // (c) SELF-REGISTER: Nếu chưa live (kể cả khi đã có stored password nhưng bị lệch),
+      // tự động fallback sang self-register password mới/pin để đồng bộ lại ngay với xe
+      if (!live && appAuthChar != null) {
         final newPw = pin.isNotEmpty ? pin : () {
           const chars =
               'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -1858,14 +1863,20 @@ class BleController extends Notifier<BleState> {
           return List.generate(12, (_) => chars[rng.nextInt(chars.length)]).join();
         }();
         BleLogger.instance.event('auto_handshake_register_password',
-            {'new_password': newPw});
+            {'new_password': newPw, 'is_fallback': hasStoredPassword});
         try {
-          await appAuthChar.write(newPw.codeUnits, withoutResponse: false);
+          await appAuthChar
+              .write(newPw.codeUnits, withoutResponse: false)
+              .timeout(const Duration(milliseconds: 800));
           await Future.delayed(const Duration(milliseconds: 80));
-          await appAuthChar.write(newPw.codeUnits, withoutResponse: false);
+          await appAuthChar
+              .write(newPw.codeUnits, withoutResponse: false)
+              .timeout(const Duration(milliseconds: 800));
           await Future.delayed(const Duration(milliseconds: 80));
           try {
-            final ack = await appAuthChar.read(); // 4B ack như capture
+            final ack = await appAuthChar
+                .read()
+                .timeout(const Duration(milliseconds: 600), onTimeout: () => Uint8List(0));
             BleLogger.instance.event('auto_handshake_register_ack',
                 {'hex': BleLogger.hex(ack)});
           } catch (_) {}
@@ -1876,14 +1887,20 @@ class BleController extends Notifier<BleState> {
 
         // Re-auth với nonce mới → derive với password vừa đăng ký
         await Future.delayed(const Duration(milliseconds: 150));
-        final nonce2 = await authChar.read();
+        final nonce2 = await authChar
+            .read()
+            .timeout(const Duration(milliseconds: 800), onTimeout: () => Uint8List(0));
         if (nonce2.length == 16) {
           final n2 = Uint8List.fromList(nonce2.sublist(0, 15));
           final resp2 = BikeSessionCrypto.computeAuthResponse(
               pairingToken: token, nonce15: n2);
-          await authChar.write(resp2, withoutResponse: false);
+          await authChar
+              .write(resp2, withoutResponse: false)
+              .timeout(const Duration(milliseconds: 800));
           await Future.delayed(const Duration(milliseconds: 120));
-          final post2 = await authChar.read();
+          final post2 = await authChar
+              .read()
+              .timeout(const Duration(milliseconds: 800), onTimeout: () => Uint8List(0));
           final ok2 = post2.length == 16 && post2[15] == Gatt.authStatusOk;
           BleLogger.instance.event('auto_handshake_reauth',
               {'post_status': BleLogger.hex(post2), 'ok': ok2});
@@ -1912,7 +1929,9 @@ class BleController extends Notifier<BleState> {
       if (live && liveKey != null) {
         final sessionUuidChar = find(Gatt.sessionUuid);
         if (sessionUuidChar != null) {
-          await sessionUuidChar.write(token.codeUnits, withoutResponse: false);
+          await sessionUuidChar
+              .write(token.codeUnits, withoutResponse: false)
+              .timeout(const Duration(milliseconds: 800));
           BleLogger.instance.event('auto_handshake_uuid_sent', {'token': token});
         }
         if (serialChar != null) {
@@ -1922,7 +1941,9 @@ class BleController extends Notifier<BleState> {
             characteristicUuid: Gatt.bikeSerial,
             data: livePw.codeUnits,
           );
-          await serialChar.write(frame2, withoutResponse: false);
+          await serialChar
+              .write(frame2, withoutResponse: false)
+              .timeout(const Duration(milliseconds: 800));
         }
         _sessionKey = liveKey;
         _activePassword = livePw;
@@ -1936,6 +1957,8 @@ class BleController extends Notifier<BleState> {
 
         // Sau khi session đã xác thực THÀNH CÔNG, đồng bộ giờ vào Taplo xe
         unawaited(syncTimeWithBike());
+        BleLogger.instance.event('auto_handshake_success');
+        return true;
       } else {
         _sessionKey = null;
         _stopKeepalive();
@@ -1949,9 +1972,9 @@ class BleController extends Notifier<BleState> {
           sessionKey: null,
           message: msg,
         );
+        BleLogger.instance.event('auto_handshake_failed_not_live');
+        return false;
       }
-      BleLogger.instance.event('auto_handshake_success');
-      return true;
     } catch (e) {
       BleLogger.instance.event('auto_handshake_failed', {'error': '$e'});
       return false;

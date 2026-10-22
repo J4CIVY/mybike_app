@@ -4,7 +4,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
-const appBuild = '20261020j';
+const appBuild = '20261022k';
 
 class BleLogger {
   BleLogger._();
