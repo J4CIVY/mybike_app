@@ -1,3 +1,10 @@
+// Dashboard — Bảng đồng hồ số kỹ thuật số (Digital Cockpit / HUD Mode)
+// Thiết kế theo hệ thống Kinetic Stitch EV:
+// 1. Tốc độ số + Đo công suất tức thời (kW Xả / kW Phanh tái sinh RECUP).
+// 2. Chỉ báo xi-nhan Trái/Phải nhấp nháy + Cảnh báo chân chống trực quan.
+// 3. Bản đồ nhiệt 3 điểm (Motor, BMS, ECU) & Bộ giải mã mã lỗi hệ thống OBD.
+// 4. Máy tính chuyến đi (Trip Computer): Quãng đường, thời gian, Vmax, Vtb, % pin đã dùng.
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,7 +28,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   DateTime? _last;
   StreamSubscription? _sub;
   bool _powerBusy = false;
-  int _activeTab = 0;
+  int _activeTab = 0; // 0: Cockpit & Chuyến đi, 1: Giám sát nhiệt & Lỗi
 
   @override
   void initState() {
@@ -196,22 +203,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final m = _msg ??
         (ble.lastTelemetry ??
             (BikeLogMsg()
-              ..model = (ble.bikeName ?? 'My Bike')
-              ..version = '1.0.0'
+              ..model = (ble.bikeName ?? 'Dat Bike Quantum')
+              ..version = '1.14.0'
               ..state = BikeState.standBy));
 
     final trip = ble.trip;
     final isEncrypted = ble.dashboardEncrypted;
 
+    // Tính công suất tức thời kW
     final powerKw = (m.voltage > 0) ? ((m.voltage * m.phase) / 1000.0) : 0.0;
-    final isRecup = powerKw < -0.05;
-    final isDraw = powerKw > 0.05;
+    final isRecup = powerKw < -0.05; // Đang phanh tái sinh nạp ngược pin
+    final isDraw = powerKw > 0.05; // Đang xả điện tăng tốc
 
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         title: Text(
-          (ble.bikeName ?? 'My Bike EV').toUpperCase(),
+          (ble.bikeName ?? 'Dat Bike EV').toUpperCase(),
           style: GoogleFonts.spaceGrotesk(
             fontWeight: FontWeight.w700,
             fontSize: 18,
@@ -221,6 +229,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.battery_charging_full_rounded),
+            tooltip: 'Bác Sĩ Pin & OBD 24-Cell',
+            onPressed: () => Navigator.of(context).pushNamed('/battery'),
+          ),
+          IconButton(
+            icon: const Icon(Icons.access_time_rounded),
+            tooltip: 'Đồng bộ giờ Taplo xe',
+            onPressed: () async {
+              final res = await ref.read(bleProvider.notifier).syncTimeWithBike();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(res),
+                  backgroundColor: res.contains('thành công') ? AppColors.tertiary : AppColors.amber,
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            },
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh_rounded),
             tooltip: 'Đặt lại Trip A',
             onPressed: () {
@@ -229,6 +257,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 const SnackBar(content: Text('Đã đặt lại đồng hồ chuyến đi Trip A!'), duration: Duration(seconds: 2)),
               );
             },
+          ),
+          IconButton(
+            icon: const Icon(Icons.tune_rounded),
+            tooltip: 'Cài đặt xe & Cảm giác lái',
+            onPressed: () => Navigator.of(context).pushNamed('/settings'),
           ),
           IconButton(
             icon: const Icon(Icons.link_off_rounded),
@@ -252,6 +285,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  // ========== BẢN BỐ CỤC DỌC (PORTRAIT COCKPIT) ==========
   Widget _buildPortraitLayout(
     BuildContext context,
     BleState ble,
@@ -292,29 +326,56 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 10),
         ],
 
+        if (m.charging != null || m.phase < -0.5) ...[
+          NoticeBanner(
+            color: AppColors.secondary,
+            text: '⚡ Xe đang sạc (${m.charging?.power ?? (m.voltage * m.phase.abs()).round()}W) · Chạm để xem ETA',
+            trailing: TextButton(
+              onPressed: () => Navigator.of(context).pushNamed('/charging'),
+              child: Text(
+                'CHI TIẾT',
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                  color: AppColors.secondary,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
+
+        // 1. Thanh chỉ báo xi-nhan & trạng thái
         _buildTopIndicators(m),
         const SizedBox(height: 10),
 
+        // 2. Cụm điều khiển nguồn chính
         _buildPowerControls(ble, m),
         const SizedBox(height: 12),
 
+        // 3. Cockpit Gauge Card
         _buildSpeedGaugeCard(m, powerKw, isRecup, isDraw),
         const SizedBox(height: 12),
 
+        // 4. Tab switcher: Chuyến đi / Sức khỏe & Mã lỗi
         _buildTabSwitcher(),
         const SizedBox(height: 12),
 
+        // 5. Nội dung theo tab
         if (_activeTab == 0) _buildTripPanel(trip) else _buildDiagnosticsPanel(m),
         const SizedBox(height: 12),
 
+        // 6. Thông tin phần cứng & dòng tải
         _buildHardwareInfo(m),
         const SizedBox(height: 14),
 
-        _buildSyncFooter(),
+        // 7. Footer đồng bộ telemetry
+        _buildSyncFooter(ble),
       ],
     );
   }
 
+  // ========== BẢN BỐ CỤC NGANG (LANDSCAPE HUD COCKPIT CHO GIÁ ĐỠ GHI-ĐÔNG) ==========
   Widget _buildLandscapeLayout(
     BuildContext context,
     BleState ble,
@@ -328,7 +389,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-
+        // Cột trái: Đồng hồ tốc độ HUD lớn & Cụm bật/tắt/còi
         Expanded(
           flex: 48,
           child: Padding(
@@ -367,6 +428,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ),
 
+        // Cột phải: Thông số, Thống kê Chuyến đi, Giám sát nhiệt & OBD
         Expanded(
           flex: 52,
           child: ListView(
@@ -400,13 +462,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               const SizedBox(height: 10),
               _buildHardwareInfo(m),
               const SizedBox(height: 12),
-              _buildSyncFooter(),
+              _buildSyncFooter(ble),
             ],
           ),
         ),
       ],
     );
   }
+
+  // ========== CÁC WIDGET THÀNH PHẦN CHỐNG TRÀN RESPONSIVE ==========
 
   Widget _buildTopIndicators(BikeLogMsg m) {
     return Panel(
@@ -415,7 +479,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-
+          // Xi-nhan trái
           AnimatedContainer(
             duration: const Duration(milliseconds: 250),
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -442,6 +506,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ),
 
+          // Trạng thái chân chống / Chế độ lái (bọc Flexible + FittedBox chống bể)
           Flexible(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -477,6 +542,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ),
 
+          // Xi-nhan phải
           AnimatedContainer(
             duration: const Duration(milliseconds: 250),
             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
@@ -570,14 +636,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             onPressed: () async {
               if (ble.isFindingBike) {
                 final res = await ref.read(bleProvider.notifier).stopFindBike();
-                if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res)));
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(res)));
               } else {
                 final res = await ref.read(bleProvider.notifier).findBike();
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(res), backgroundColor: AppColors.amber, behavior: SnackBarBehavior.floating),
-                  );
-                }
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(res), backgroundColor: AppColors.amber, behavior: SnackBarBehavior.floating),
+                );
               }
             },
           ),
@@ -1007,6 +1073,28 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               ),
             ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary, width: 1.2),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              icon: const Icon(Icons.battery_charging_full_rounded, size: 18),
+              label: Text(
+                'MỞ BÁC SĨ PIN 24-CELL & OBD CHI TIẾT',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              onPressed: () => Navigator.of(context).pushNamed('/battery'),
+            ),
+          ),
         ],
       ),
     );
@@ -1034,11 +1122,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  Widget _buildSyncFooter() {
+  Widget _buildSyncFooter(BleState ble) {
+    final telemetryTime = _last == null
+        ? 'Đang nhận telemetry…'
+        : 'Telemetry: ${_last!.toLocal().toString().substring(11, 19)}';
+    final taploTime = ble.lastTimeSynced == null
+        ? ''
+        : ' · Taplo: ${ble.lastTimeSynced!.hour.toString().padLeft(2, '0')}:${ble.lastTimeSynced!.minute.toString().padLeft(2, '0')}:${ble.lastTimeSynced!.second.toString().padLeft(2, '0')}';
+    final rssiStr = ble.filteredRssi != null ? ' · Sóng: ${ble.filteredRssi} dBm' : '';
+
     return Text(
-      _last == null
-          ? 'Đang đồng bộ telemetry từ xe qua BLE…'
-          : 'Cập nhật trực tiếp: ${_last!.toLocal().toString().substring(11, 19)} (Chu kỳ 1s)',
+      '$telemetryTime$taploTime$rssiStr',
       textAlign: TextAlign.center,
       style: GoogleFonts.spaceGrotesk(
         fontSize: 11.5,

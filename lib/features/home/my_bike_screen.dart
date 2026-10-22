@@ -1,3 +1,7 @@
+// My Bike — Màn hình trung tâm (Kinetic Stitch EV):
+// Bảng điều khiển tối giản chuẩn EV, thẻ trắng nâng cao, hiển thị pin dạng capsule,
+// điều khiển nguồn hyper-legible, thông số telemetry Tabular Figures.
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -67,6 +71,7 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
       _ => (AppColors.textDim, 'SẴN SÀNG', false),
     };
 
+    // Công suất tức thời kW
     final powerKw = (telemetry != null && telemetry.voltage > 0)
         ? ((telemetry.voltage * telemetry.phase) / 1000.0)
         : 0.0;
@@ -77,14 +82,14 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
           children: [
-
+            // Top App Bar / Header
             Row(
               children: [
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'MY BIKE EV',
+                      'DAT BIKE EV',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
@@ -106,10 +111,17 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
                 ),
                 const Spacer(),
                 StatusPill(label: pillLabel, color: pillColor, pulse: pulse),
+                const SizedBox(width: 6),
+                IconButton(
+                  icon: const Icon(Icons.tune_rounded, color: AppColors.textPrimary, size: 22),
+                  tooltip: 'Cài đặt xe & Hiệu năng',
+                  onPressed: () => Navigator.of(context).pushNamed('/settings'),
+                ),
               ],
             ),
             const SizedBox(height: 16),
 
+            // Hero Card Xe (Kinetic Stitch Pure White Card)
             Panel(
               padding: const EdgeInsets.all(20),
               borderRadius: 20,
@@ -179,6 +191,7 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
                     ),
                   ],
 
+                  // Telemetry Metrics Mini Strip khi đã kết nối
                   if (connected && telemetry != null) ...[
                     const SizedBox(height: 18),
                     const Divider(color: AppColors.panelBorder, height: 1),
@@ -273,15 +286,60 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
             ),
             const SizedBox(height: 16),
 
+            // Battery & Range Capsule (EV Exclusive)
             if (connected && telemetry != null) ...[
               BatteryRangeCapsule(
                 percent: telemetry.percent,
                 kmLeft: telemetry.kmLeft,
                 isCharging: telemetry.charging != null,
+                onTap: () => Navigator.of(context).pushNamed('/battery'),
               ),
               const SizedBox(height: 16),
+
+              // Dynamic Charging Alert Card khi đang sạc
+              if (telemetry.charging != null || telemetry.phase < -0.5) ...[
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pushNamed('/charging'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: AppColors.secondary.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.secondary.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.bolt_rounded, color: AppColors.secondary, size: 24),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'ĐANG CẮM SẠC PIN',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.secondary,
+                                ),
+                              ),
+                              Text(
+                                'Xem chi tiết công suất sạc, điện áp lưới & đồng hồ ETA ->',
+                                style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textDim),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.secondary),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
             ],
 
+            // Reconnect / Scan Buttons khi chưa kết nối
             if (!connected) ...[
               if (ble.bikeName != null) ...[
                 VehicleCommandButton(
@@ -305,7 +363,7 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
                 VehicleCommandButton(
                   icon: Icons.radar,
                   title: 'TÌM XE BLUETOOTH',
-                  subtitle: 'Bắt đầu quét xe My Bike xung quanh',
+                  subtitle: 'Bắt đầu quét xe Dat Bike xung quanh',
                   backgroundColor: AppColors.primary,
                   onPressed: busy ? null : () => Navigator.of(context).pushNamed('/scan'),
                 ),
@@ -313,6 +371,7 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
               const SizedBox(height: 16),
             ],
 
+            // Cụm Công tắc Nguồn Bật / Tắt Xe chính (Level 1 Panel)
             if (connected) ...[
               Panel(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -423,6 +482,7 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
               const SizedBox(height: 16),
             ],
 
+            // Cụm Điều khiển Nhanh
             const SectionTitle('ĐIỀU KHIỂN NHANH'),
             const SizedBox(height: 10),
             Panel(
@@ -484,11 +544,203 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
                       }
                     },
                   ),
+                  RoundControl(
+                    icon: Icons.ev_station_rounded,
+                    label: 'Trạm sạc',
+                    enabled: true,
+                    activeColor: AppColors.secondary,
+                    onTap: () => Navigator.of(context).pushNamed('/charging'),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 16),
 
+            // Trạng thái Kết nối & Đồng bộ Taplo xe (Sprint 1)
+            if (connected) ...[
+              const SectionTitle('KẾT NỐI & ĐỒNG BỘ TAPLO'),
+              const SizedBox(height: 10),
+              Panel(
+                padding: const EdgeInsets.all(16),
+                borderRadius: 20,
+                child: Column(
+                  children: [
+                    // 1. Tín hiệu BLE & Khoảng cách (Kalman Filter)
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: ((ble.filteredRssi ?? -100) > -65
+                                    ? AppColors.tertiary
+                                    : (ble.filteredRssi ?? -100) > -85
+                                        ? AppColors.secondary
+                                        : AppColors.amber)
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Icon(
+                            (ble.filteredRssi ?? -100) > -65
+                                ? Icons.near_me_rounded
+                                : (ble.filteredRssi ?? -100) > -85
+                                    ? Icons.bluetooth_connected_rounded
+                                    : Icons.directions_walk_rounded,
+                            color: (ble.filteredRssi ?? -100) > -65
+                                ? AppColors.tertiary
+                                : (ble.filteredRssi ?? -100) > -85
+                                    ? AppColors.secondary
+                                    : AppColors.amber,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    'Tín hiệu cự ly',
+                                    style: GoogleFonts.plusJakartaSans(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textPrimary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary.withValues(alpha: 0.1),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      'Kalman 1D',
+                                      style: GoogleFonts.spaceGrotesk(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.primary,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                ble.filteredRssi != null
+                                    ? 'Cường độ: ${ble.filteredRssi} dBm (Gốc: ${ble.rssi ?? "--"} dBm)'
+                                    : 'Đang đo suy hao sóng BLE…',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  color: AppColors.textDim,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        StatusPill(
+                          label: (ble.filteredRssi ?? -100) > -65
+                              ? 'RẤT GẦN'
+                              : (ble.filteredRssi ?? -100) > -85
+                                  ? 'CỰ LY VỪA'
+                                  : 'Ở XA',
+                          color: (ble.filteredRssi ?? -100) > -65
+                              ? AppColors.tertiary
+                              : (ble.filteredRssi ?? -100) > -85
+                                  ? AppColors.secondary
+                                  : AppColors.amber,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    const Divider(color: AppColors.panelBorder, height: 1),
+                    const SizedBox(height: 14),
+
+                    // 2. Đồng bộ thời gian thực Taplo xe
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.access_time_filled_rounded,
+                            color: AppColors.primary,
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Đồng hồ Taplo xe',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 3),
+                              Text(
+                                ble.lastTimeSynced != null
+                                    ? 'Đã đồng bộ: ${ble.lastTimeSynced!.hour.toString().padLeft(2, '0')}:${ble.lastTimeSynced!.minute.toString().padLeft(2, '0')}:${ble.lastTimeSynced!.second.toString().padLeft(2, '0')}'
+                                    : 'Tự động gửi khi bắt tay xe',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 12,
+                                  color: ble.lastTimeSynced != null
+                                      ? AppColors.tertiary
+                                      : AppColors.textDim,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          icon: const Icon(Icons.sync_rounded, size: 16),
+                          label: Text(
+                            'Gửi giờ',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          onPressed: () async {
+                            final res = await ref.read(bleProvider.notifier).syncTimeWithBike();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(res),
+                                  backgroundColor: res.contains('thành công')
+                                      ? AppColors.tertiary
+                                      : AppColors.amber,
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+
+            // Tự Động Hóa Thông Minh & An Toàn
             const SectionTitle('TỰ ĐỘNG HÓA & AN TOÀN'),
             const SizedBox(height: 10),
             Panel(
@@ -553,11 +805,34 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
                       onSelected: (idx) => ref.read(bleProvider.notifier).setAutoLockDistance(idx),
                     ),
                   ],
+                  const Divider(color: AppColors.panelBorder, height: 1),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
+                    ),
+                    title: Text(
+                      'Cài đặt hiệu năng & Cảm giác lái',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      'Mức phanh tái sinh RECUP, độ nhạy ga, mẫu còi tìm xe',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textDim),
+                    ),
+                    trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 14, color: AppColors.textDim),
+                    onTap: () => Navigator.of(context).pushNamed('/settings'),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 20),
 
+            // Nút Quên xe / Xóa xe
             if (ble.bikeName != null) ...[
               Center(
                 child: TextButton.icon(

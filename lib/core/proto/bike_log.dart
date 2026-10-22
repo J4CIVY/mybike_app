@@ -1,12 +1,23 @@
+// Decoder protobuf cho telemetry xe Dat Bike.
+// 
+// Schema nguồn: `../datbike-eproject/docs/proto/bike.proto` (trích nguyên văn
+// từ app gốc). Viết decoder thủ công theo wire-format proto3 để tránh phụ thuộc
+// protoc — trường chỉ dùng: varint (uint32/bool/enum), fixed32 (float),
+// length-delimited (string/bytes/submessage/repeated packed).
+// 
+// Lưu ý tương thích: decode "lỏng" — gặp field số/wire-type lạ thì bỏ qua
+// (đúng hành vi proto3 với unknown fields), giúp sống sót khi firmware thêm field.
+
 import 'dart:convert';
 import 'dart:typed_data';
 
+// enum State của xe (bike.proto).
 enum BikeState {
   off,
   standBy,
   parking,
   drive,
-  super_,
+  super_, // SUPER = 4
   cruiseControl,
   reverse,
   lock,
@@ -36,31 +47,32 @@ class BikeLogMsg {
   String name = '';
   String model = '';
   String frame = '';
-  int distance = 0;
+  int distance = 0; // m
   bool idleOff = false;
   String version = '';
   String hash = '';
-  double ecu = 0;
-  double motor = 0;
+  double ecu = 0; // °C
+  double motor = 0; // °C
   double adc1 = 0;
   double adc2 = 0;
-  double phase = 0;
+  double phase = 0; // A
   BikeState state = BikeState.off;
   int error = 0;
-  double odo = 0;
-  double speed = 0;
-  double throttle = 0;
+  double odo = 0; // km
+  double speed = 0; // km/h
+  double throttle = 0; // %
   bool left = false;
   bool right = false;
   bool headlight = false;
-  double kmLeft = 0;
-  double voltage = 0;
-  int percent = 0;
-  double bmsTemp = 0;
-  bool parking = false;
-  ChargerLogMsg? charging;
+  double kmLeft = 0; // km
+  double voltage = 0; // V (pack pin)
+  int percent = 0; // % SoC pin (0-100)
+  double bmsTemp = 0; // °C (nhiệt độ BMS)
+  bool parking = false; // chân chống (true = đỗ/hạ chân chống)
+  ChargerLogMsg? charging; // presence = đang sạc
   int chargeProfile = 0;
 
+  /// Xe đang bật nguồn (không ở trạng thái off hoặc lock)
   bool get isBikeOn => state != BikeState.off && state != BikeState.lock;
 
   @override
@@ -71,8 +83,8 @@ class BikeLogMsg {
 }
 
 class BatteryLogMsg {
-  double voltage = 0;
-  double current = 0;
+  double voltage = 0; // V
+  double current = 0; // A
   int balancing = 0;
   int protection = 0;
   bool charge = false;
@@ -82,7 +94,7 @@ class BatteryLogMsg {
   double fet = 0;
   List<int> protections = [];
   int error = 0;
-  List<double> cellVols = [];
+  List<double> cellVols = []; // điện áp từng cell
   double socV = 0;
   double socI = 0;
   double socAh = 0;
@@ -94,6 +106,10 @@ class BatteryLogMsg {
   String toString() => 'Battery(v=$voltage, i=$current, cells=${cellVols.length}, '
       'soc=$socSoc, cycles=$socCycles, error=$error)';
 }
+
+// ---------------------------------------------------------------------------
+// Wire-format primitives
+// ---------------------------------------------------------------------------
 
 class _Reader {
   final Uint8List b;
@@ -109,7 +125,7 @@ class _Reader {
       result |= (byte & 0x7f) << shift;
       if (byte & 0x80 == 0) break;
       shift += 7;
-      if (shift > 63) break;
+      if (shift > 63) break; // chống buffer lỗi
     }
     return result;
   }
@@ -135,7 +151,8 @@ void _forEachField(Uint8List data, void Function(int field, int wire, _Reader r)
     final wire = tag & 7;
     final before = r.pos;
     fn(field, wire, r);
-
+    // Field quen thuộc nhưng wire-type sai (frame hỏng/firmware lạ): không có gì
+    // được tiêu thụ → skip theo wire-type để không desync phần sau của frame.
     if (r.pos == before) _skip(r, wire);
   }
 }
@@ -179,6 +196,10 @@ List<int>? _readPackedVarints(_Reader r, int wire) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Message decoders
+// ---------------------------------------------------------------------------
 
 ChargerLogMsg? decodeChargerLogMsg(Uint8List data) {
   final m = ChargerLogMsg();
@@ -279,6 +300,52 @@ BikeLogMsg decodeBikeLogMsg(Uint8List data) {
 }
 
 BatteryLogMsg decodeBatteryLogMsg(Uint8List data) {
+  if (data.isEmpty) return BatteryLogMsg();
+
+  // 1. App gốc fallback: nếu payload bắt đầu bằng '{' (0x7B) -> JSON text UTF-8
+  if (data[0] == 0x7B) {
+    try {
+      final jsonStr = utf8.decode(data, allowMalformed: true).trim();
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final m = BatteryLogMsg();
+      m.voltage = (map['voltage'] as num?)?.toDouble() ?? 0;
+      m.current = (map['current'] as num?)?.toDouble() ?? 0;
+      m.balancing = (map['balancing'] as num?)?.toInt() ?? 0;
+      m.protection = (map['protection'] as num?)?.toInt() ?? 0;
+      m.charge = map['charge'] == true;
+      m.discharge = map['discharge'] == true;
+      m.resistor = (map['resistor'] as num?)?.toDouble() ?? 0;
+      m.fet = (map['fet'] as num?)?.toDouble() ?? 0;
+      m.error = (map['error'] as num?)?.toInt() ?? 0;
+
+      if (map['cellVols'] is List) {
+        m.cellVols = (map['cellVols'] as List)
+            .map((e) => (e as num).toDouble())
+            .where((v) => v >= 0.0 && v <= 6.0)
+            .toList();
+      }
+      if (map['NTCs'] is List) {
+        m.ntcs = (map['NTCs'] as List).map((e) => (e as num).toDouble()).toList();
+      }
+      if (map['protections'] is List) {
+        m.protections = (map['protections'] as List).map((e) => (e as num).toInt()).toList();
+      }
+      if (map['soc'] is Map) {
+        final s = map['soc'] as Map<String, dynamic>;
+        m.socV = (s['V'] as num?)?.toDouble() ?? 0;
+        m.socI = (s['I'] as num?)?.toDouble() ?? 0;
+        m.socAh = (s['Ah'] as num?)?.toDouble() ?? 0;
+        m.socCycles = (s['cycles'] as num?)?.toDouble() ?? 0;
+        m.socSoc = (s['soc'] as num?)?.toDouble() ?? 0;
+        m.socAbsAh = (s['absAh'] as num?)?.toDouble() ?? 0;
+      }
+      return m;
+    } catch (_) {
+      // Tiếp tục thử decode protobuf nếu chuỗi không phải JSON hợp lệ
+    }
+  }
+
+  // 2. Decode Protobuf binary format
   final m = BatteryLogMsg();
   _forEachField(data, (field, wire, r) {
     switch (field) {
@@ -295,17 +362,30 @@ BatteryLogMsg decodeBatteryLogMsg(Uint8List data) {
       case 6:
         m.discharge = (_readVarint(r, wire) ?? 0) != 0;
       case 7:
-        m.ntcs = _readPackedFloats(r, wire) ?? m.ntcs;
+        if (wire == 2) {
+          m.ntcs = _readPackedFloats(r, wire) ?? m.ntcs;
+        } else if (wire == 5) {
+          m.ntcs.add(r.readFloat());
+        }
       case 8:
         m.resistor = _readFloat(r, wire) ?? m.resistor;
       case 9:
         m.fet = _readFloat(r, wire) ?? m.fet;
       case 10:
-        m.protections = _readPackedVarints(r, wire) ?? m.protections;
+        if (wire == 2) {
+          m.protections = _readPackedVarints(r, wire) ?? m.protections;
+        } else if (wire == 0) {
+          final v = _readVarint(r, wire);
+          if (v != null) m.protections.add(v);
+        }
       case 11:
         m.error = _readVarint(r, wire) ?? m.error;
       case 12:
-        m.cellVols = _readPackedFloats(r, wire) ?? m.cellVols;
+        if (wire == 2) {
+          m.cellVols = _readPackedFloats(r, wire) ?? m.cellVols;
+        } else if (wire == 5) {
+          m.cellVols.add(r.readFloat());
+        }
       case 13:
         m.socV = _readFloat(r, wire) ?? m.socV;
       case 14:
@@ -340,10 +420,31 @@ void _skip(_Reader r, int wire) {
   }
 }
 
+
+// ---------------------------------------------------------------------------
+// RAW STRUCT decoder cho Dashboard characteristic (6d2eb205, 41 byte).
+// Phát hiện 2026-10-20 bằng log thật (session 192848): payload GIẢI MÃ ĐÚNG
+// ---------------------------------------------------------------------------
+// 6d2eb205: characteristic DASHBOARD — struct 41B Little Endian:
+//   [0:4]   f32 LE — ODO (km) (ví dụ: 31219.5 km)
+//   [4:8]   f32 LE — SPEED (km/h) (tốc độ xe thực tế)
+//   [8:12]  f32 LE — CURRENT (A) (dòng điện âm khi kéo ga, dương khi tái tạo)
+//   [12]    u8     — LEFT (xi-nhan trái: 0/1)
+//   [13]    u8     — RIGHT (xi-nhan phải: 0/1)
+//   [14]    u8     — PARKING (chân chống: 1=đang hạ chống/đỗ, 0=gạt lên)
+//   [15:19] f32 LE — VOLTAGE (V) (điện áp khối pin, ví dụ: 75.8V)
+//   [19]    u8     — PERCENT (% SoC pin, ví dụ: 63%)
+//   [20:24] f32 LE — BMS TEMP (°C) (nhiệt độ BMS / khối pin, ví dụ: 29.0°C)
+//   [24:28] f32 LE — MOTOR TEMP (°C) (nhiệt độ động cơ, ví dụ: 34.0°C)
+//   [28:32] f32 LE — ECU TEMP (°C) (nhiệt độ bo điều khiển ECU, ví dụ: 32.0°C)
+//   [32]    u8     — STATE (BikeState enum: 2=parking, 3=drive, 4=super)
+//   [33:37] u32 LE — ERROR (mã lỗi hệ thống: 0=bình thường)
+//   [37:41] f32 LE — KM LEFT (km) (quãng đường đi được còn lại, ví dụ: 171.4 km)
+// ---------------------------------------------------------------------------
 BikeLogMsg decodeDashboardStruct(Uint8List pt) {
   final m = BikeLogMsg();
-  m.model = 'My Bike';
-  m.version = '1.0.0';
+  m.model = 'Dat Bike';
+  m.version = '1.14.0';
   if (pt.length < 41) return m;
 
   final bd = ByteData.sublistView(pt);

@@ -1,8 +1,15 @@
+// Kinetic Stitch EV Design System — Core Widgets
+// Structural clarity, hyper-legibility, pure white cards on luminous canvas,
+// hairline borders (#E2E8F0), soft ambient depth, Space Grotesk & Plus Jakarta Sans.
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'app_theme.dart';
 
+/// Thẻ Card chuẩn Level 1 của Kinetic Stitch EV:
+/// Nền trắng tinh khiết, viền mảnh 1px #E2E8F0, góc bo 16px (rounded-lg),
+/// đổ bóng vi mô mềm mại (hyper-diffused ambient shadow).
 class Panel extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
@@ -52,6 +59,8 @@ class Panel extends StatelessWidget {
   }
 }
 
+/// Status Pill / Chip: Bo tròn tuyệt đối (Stadium / Pill 9999px)
+/// Nhãn in hoa với tracking 0.06em và điểm neon chỉ thị trạng thái.
 class StatusPill extends StatelessWidget {
   final String label;
   final Color color;
@@ -148,6 +157,8 @@ class _PulsingDotState extends State<_PulsingDot>
   }
 }
 
+/// Ô số liệu Metric Tile:
+/// Tiêu đề label-sm muted, số liệu Space Grotesk quá khổ với Tabular Figures.
 class MetricTile extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -268,6 +279,8 @@ class MetricTile extends StatelessWidget {
   }
 }
 
+/// Nút điều khiển xe Vehicle Command Button lớn:
+/// 56px height, bo tròn 16px (rounded-lg), Space Grotesk title, subtext kỹ thuật.
 class VehicleCommandButton extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -346,6 +359,7 @@ class VehicleCommandButton extends StatelessWidget {
   }
 }
 
+/// Điều khiển thao tác nhanh dạng pill / dock (thay thế nút tròn cũ).
 class RoundControl extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -417,16 +431,19 @@ class RoundControl extends StatelessWidget {
   }
 }
 
+/// Thanh trạng thái Pin & Quãng đường dạng Capsule (EV Exclusive)
 class BatteryRangeCapsule extends StatelessWidget {
   final int percent;
   final double kmLeft;
   final bool isCharging;
+  final VoidCallback? onTap;
 
   const BatteryRangeCapsule({
     super.key,
     required this.percent,
     required this.kmLeft,
     this.isCharging = false,
+    this.onTap,
   });
 
   @override
@@ -441,6 +458,7 @@ class BatteryRangeCapsule extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       borderRadius: 16,
       hasActiveHalo: isCharging,
+      onTap: onTap,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -474,7 +492,7 @@ class BatteryRangeCapsule extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-
+          // Capsule Progress Bar
           ClipRRect(
             borderRadius: BorderRadius.circular(9999),
             child: Container(
@@ -517,12 +535,33 @@ class BatteryRangeCapsule extends StatelessWidget {
               ),
             ],
           ),
+          if (onTap != null) ...[
+            const SizedBox(height: 10),
+            const Divider(color: AppColors.panelBorder, height: 1),
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Bác Sĩ Pin & Chẩn đoán OBD 24-Cell',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.primary,
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.primary),
+              ],
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
+/// Banner thông báo chuẩn Kinetic Stitch EV:
+/// Viền hairline mảnh, nền màu nhạt độ sáng cao, chữ dễ đọc.
 class NoticeBanner extends StatelessWidget {
   final Color color;
   final String text;
@@ -566,6 +605,7 @@ class NoticeBanner extends StatelessWidget {
   }
 }
 
+/// Tiêu đề phân mục cấu trúc (Section Title)
 class SectionTitle extends StatelessWidget {
   final String text;
   final Widget? action;
@@ -587,17 +627,19 @@ class SectionTitle extends StatelessWidget {
               borderRadius: BorderRadius.circular(2),
             ),
           ),
-          Text(
-            text.toUpperCase(),
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.06 * 12,
-              color: AppColors.textDim,
+          Expanded(
+            child: Text(
+              text.toUpperCase(),
+              style: GoogleFonts.plusJakartaSans(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.06 * 12,
+                color: AppColors.textDim,
+              ),
             ),
           ),
           if (action != null) ...[
-            const Spacer(),
+            const SizedBox(width: 8),
             action!,
           ],
         ],

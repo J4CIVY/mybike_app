@@ -27,6 +27,15 @@ class Gatt {
 
   static const firmwareVersion = 'd1da175e-b1b5-4248-8f36-98c9482b8d24';
 
+  /// Đồng bộ giờ đồng hồ LCD Taplo xe (CURRENT_TIME_CHAR_UUID / getCharTimeSyncUuid)
+  /// Ghi chuỗi ASCII số giây từ 00:00:00 (vd 14:15:30 -> "51330").
+  static const currentTimeChar = '44e2bde6-9cd5-4159-9d43-a3e3f4e9c737';
+  static const timeSyncChar = '44e2bde6-9cd5-4159-9d43-a3e3f4e9c737';
+
+  /// Serial xe thật (Device/Frame Serial từ getCharDeviceSerialUuid)
+  static const deviceSerialChar = '041d5a06-e35f-42d3-92c8-0d421186d2f3';
+
+  @Deprecated('Char 44e2bde6 thực chất là currentTimeChar (đồng bộ giờ xe), không phải serial')
   static const bikeSerial = '44e2bde6-9cd5-4159-9d43-a3e3f4e9c737';
 
   static const sessionUuid = '87efab0d-9e32-4ab8-8916-ed7cb72d819a';

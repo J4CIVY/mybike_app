@@ -5,6 +5,9 @@ import 'features/scan/scan_screen.dart';
 import 'features/scan/connecting_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/home/my_bike_screen.dart';
+import 'features/battery/battery_diagnostics_screen.dart';
+import 'features/charging/charging_screen.dart';
+import 'features/settings/vehicle_settings_screen.dart';
 import 'ui/app_theme.dart';
 
 void main() {
@@ -28,6 +31,9 @@ class MyBikeApp extends StatelessWidget {
         '/scan': (_) => const ScanScreen(),
         '/connecting': (_) => const ConnectingScreen(),
         '/dashboard': (_) => const DashboardScreen(),
+        '/battery': (_) => const BatteryDiagnosticsScreen(),
+        '/charging': (_) => const ChargingScreen(),
+        '/settings': (_) => const VehicleSettingsScreen(),
       },
     );
   }

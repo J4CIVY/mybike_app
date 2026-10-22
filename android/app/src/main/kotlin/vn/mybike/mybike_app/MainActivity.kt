@@ -44,6 +44,41 @@ class MainActivity : FlutterActivity() {
                         result.error("FOREGROUND_STOP_FAILED", e.message, null)
                     }
                 }
+                "openMap" -> {
+                    val url = call.argument<String>("url")
+                    try {
+                        if (url != null) {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            result.success(true)
+                        } else {
+                            result.error("URL_NULL", "URL is null", null)
+                        }
+                    } catch (e: Exception) {
+                        result.error("MAP_FAILED", e.message, null)
+                    }
+                }
+                else -> result.notImplemented()
+            }
+        }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "vn.datbike/export").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openMap" -> {
+                    val url = call.argument<String>("url")
+                    try {
+                        if (url != null) {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                            result.success(true)
+                        } else {
+                            result.error("URL_NULL", "URL is null", null)
+                        }
+                    } catch (e: Exception) {
+                        result.error("MAP_FAILED", e.message, null)
+                    }
+                }
                 else -> result.notImplemented()
             }
         }
