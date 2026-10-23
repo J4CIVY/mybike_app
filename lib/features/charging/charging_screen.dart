@@ -367,7 +367,83 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
             ],
           ),
         ),
+
+        // Profile sạc thật — ghi xuống xe (CHARGING_SERVICE 8a2b0d10)
+        const SizedBox(height: 16),
+        Panel(
+          padding: const EdgeInsets.all(18),
+          borderRadius: 20,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'PROFILE SẠC (GHI XUỐNG XE)',
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.5,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Firmware hỗ trợ 3 profile sạc — lệnh ghi trực tiếp qua Bluetooth (protected write).',
+                style: GoogleFonts.plusJakartaSans(fontSize: 11.5, color: AppColors.textDim),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  _buildProfileOption(0, 'Standard', ref.watch(bleProvider).chargingProfile == 0),
+                  const SizedBox(width: 8),
+                  _buildProfileOption(1, 'Fast', ref.watch(bleProvider).chargingProfile == 1),
+                  const SizedBox(width: 8),
+                  _buildProfileOption(2, 'Boost', ref.watch(bleProvider).chargingProfile == 2),
+                ],
+              ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+
+  Widget _buildProfileOption(int value, String label, bool isSelected) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: () async {
+          ref.read(bleProvider.notifier).setChargingProfile(value);
+          final msg = await ref.read(bleProvider.notifier).setFwChargingProfile(value);
+          if (mounted) {
+            ScaffoldMessenger.of(context)
+              ..hideCurrentSnackBar()
+              ..showSnackBar(SnackBar(
+                content: Text(msg, style: GoogleFonts.plusJakartaSans(fontSize: 12.5)),
+                behavior: SnackBarBehavior.floating,
+              ));
+          }
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.secondary : AppColors.panelSecondary,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isSelected ? AppColors.secondary : AppColors.panelBorder,
+              width: isSelected ? 1.5 : 1,
+            ),
+          ),
+          child: Text(
+            label,
+            style: GoogleFonts.spaceGrotesk(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: isSelected ? Colors.white : AppColors.textPrimary,
+            ),
+          ),
+        ),
+      ),
     );
   }
 

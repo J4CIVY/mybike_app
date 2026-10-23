@@ -51,8 +51,10 @@ class ChargingRouterService {
     int targetLimit = 80,
   }) {
     final charger = telemetry?.charging;
-    // Nhận diện sạc dựa trên dòng sạc âm thực tế đi vào pack pin từ ECU hoặc có gói tin Charger
-    final isCharging = charger != null || (telemetry != null && telemetry.phase < -0.5);
+    // QUY ƯỚC DẤU (verify session 20261022T212957): current@8 ÂM = xe DÙNG pin
+    // (chạy xe tải lớn tới -24.9A, điện áp xả 76.8→76.4V); sạc vào pin là DƯƠNG.
+    // isCharging = có gói ChargerLogMsg HOẶC dòng DƯƠNG > 0.5A.
+    final isCharging = charger != null || (telemetry != null && telemetry.phase > 0.5);
 
     final power = charger?.power ??
         (isCharging && telemetry != null && telemetry.voltage > 0

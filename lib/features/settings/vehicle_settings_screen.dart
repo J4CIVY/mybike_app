@@ -97,13 +97,36 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
           _buildSoundPatternCard(ble, connected),
           const SizedBox(height: 16),
 
-          // 5. Giới Hạn Tốc Độ An Toàn (Speed Limiter)
+          // 5. Giới Hạn Tốc Độ An Toàn (Speed Limiter) — ghi THẬT xuống xe
           const SectionTitle('GIỚI HẠN TỐC ĐỘ AN TOÀN'),
           const SizedBox(height: 10),
           _buildSpeedLimiterCard(ble),
+          const SizedBox(height: 16),
+
+          // 6. Cài đặt xe thật (firmware MASTER_CONFIG)
+          const SectionTitle('CÀI ĐẶT XE (FIRMWARE)'),
+          const SizedBox(height: 10),
+          _buildFirmwareSettingsCard(ble, connected),
+          const SizedBox(height: 16),
+
+          // 7. Nâng cao — cẩn thận
+          const SectionTitle('NÂNG CAO — CẨN THẬN'),
+          const SizedBox(height: 10),
+          _buildAdvancedCard(ble, connected),
         ],
       ),
     );
+  }
+
+  void _showResult(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(message, style: GoogleFonts.plusJakartaSans(fontSize: 12.5)),
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 4),
+      ));
   }
 
   // ========== THẺ 1: THÔNG TIN XE & SERIAL ==========
@@ -686,6 +709,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
 
   // ========== THẺ 4: GIỚI HẠN TỐC ĐỘ AN TOÀN ==========
   Widget _buildSpeedLimiterCard(BleState ble) {
+    final connected = ble.phase == BlePhase.connected;
     return Panel(
       padding: const EdgeInsets.all(18),
       borderRadius: 20,
@@ -696,22 +720,22 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
             padding: const EdgeInsets.all(12),
             margin: const EdgeInsets.only(bottom: 12),
             decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.12),
+              color: AppColors.tertiary.withValues(alpha: 0.12),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+              border: Border.all(color: AppColors.tertiary.withValues(alpha: 0.35)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 20),
+                const Icon(Icons.verified_rounded, color: AppColors.tertiary, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'CẢNH BÁO AN TOÀN: Firmware xe hiện tại (v1.14.0) KHÔNG hỗ trợ giới hạn tốc độ xe từ Bluetooth! Xe vẫn chạy với công suất nguyên bản. TUYỆT ĐỐI KHÔNG sử dụng tùy chọn này làm chốt an toàn để cho người mới tập lái mượn xe!',
+                    'Giới hạn tốc độ được XE thực thi thật (firmware onWriteSpeedLimit — char 0a19a49a, protected write). Lệnh ghi trực tiếp xuống xe qua Bluetooth, không phụ thuộc app.',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11.5,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.error,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.tertiary,
                       height: 1.4,
                     ),
                   ),
@@ -720,7 +744,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
             ),
           ),
           Text(
-            'Hồ sơ tốc độ lái khuyến nghị trên ứng dụng (App-side Driver Profile):',
+            connected ? 'Chọn mức giới hạn (ghi xuống xe ngay):' : 'Kết nối xe để ghi giới hạn tốc độ xuống firmware:',
             style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
           ),
           const SizedBox(height: 12),
@@ -728,25 +752,318 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
             children: [
               _buildSegmentOption(
                 label: 'Không giới hạn',
-                desc: 'Hồ sơ Full Power',
+                desc: 'Full Power',
                 isSelected: ble.speedLimitMode == 0,
-                onTap: () => ref.read(bleProvider.notifier).setSpeedLimitMode(0),
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setSpeedLimitMode(0);
+                  if (connected) {
+                    _showResult(await ref.read(bleProvider.notifier).setFwSpeedLimit(0));
+                  }
+                },
               ),
               const SizedBox(width: 8),
               _buildSegmentOption(
                 label: 'Đô thị',
-                desc: 'Khuyến nghị 50 km/h',
+                desc: '≈50 km/h',
                 isSelected: ble.speedLimitMode == 1,
-                onTap: () => ref.read(bleProvider.notifier).setSpeedLimitMode(1),
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setSpeedLimitMode(1);
+                  if (connected) {
+                    _showResult(await ref.read(bleProvider.notifier).setFwSpeedLimit(1));
+                  }
+                },
               ),
               const SizedBox(width: 8),
               _buildSegmentOption(
                 label: 'Tập lái',
-                desc: 'Khuyến nghị 30 km/h',
+                desc: '≈30 km/h',
                 isSelected: ble.speedLimitMode == 2,
-                onTap: () => ref.read(bleProvider.notifier).setSpeedLimitMode(2),
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setSpeedLimitMode(2);
+                  if (connected) {
+                    _showResult(await ref.read(bleProvider.notifier).setFwSpeedLimit(2));
+                  }
+                },
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Cài đặt xe thật từ firmware MASTER_CONFIG service f7e2c8a1.
+  Widget _buildFirmwareSettingsCard(BleState ble, bool connected) {
+    return Panel(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Chế độ lái & tiện ích (firmware xử lý trực tiếp):',
+            style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
+          ),
+          const SizedBox(height: 14),
+
+          // ECE mode
+          Text('CHẾ ĐỘ ECE', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildSegmentOption(label: 'Tắt', desc: 'ECE 0', isSelected: ble.eceMode == 0,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setEceMode(0);
+                  _showResult(await ref.read(bleProvider.notifier).setFwEceMode(0));
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(label: 'Chuẩn', desc: 'ECE 1', isSelected: ble.eceMode == 1,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setEceMode(1);
+                  _showResult(await ref.read(bleProvider.notifier).setFwEceMode(1));
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(label: 'Mạnh', desc: 'ECE 2', isSelected: ble.eceMode == 2,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setEceMode(2);
+                  _showResult(await ref.read(bleProvider.notifier).setFwEceMode(2));
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Grab mode
+          Text('CHẾ ĐỘ GRAB (xe dịch vụ)', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildSegmentOption(label: 'Cá nhân', desc: 'Grab 0', isSelected: ble.grabMode == 0,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setGrabMode(0);
+                  _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(0));
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(label: 'Dịch vụ 1', desc: 'Grab 1', isSelected: ble.grabMode == 1,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setGrabMode(1);
+                  _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(1));
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(label: 'Dịch vụ 2', desc: 'Grab 2', isSelected: ble.grabMode == 2,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setGrabMode(2);
+                  _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(2));
+                },
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Tự tắt khi đỗ
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('TỰ TẮT KHI ĐỖ', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text('Xe tự tắt nguồn sau khi đỗ lâu (idling turn-off)',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim)),
+                  ],
+                ),
+              ),
+              Switch(
+                value: ble.idlingTurnOff,
+                activeThumbColor: AppColors.primary,
+                onChanged: connected ? (v) async {
+                  ref.read(bleProvider.notifier).setIdlingTurnOff(v);
+                  _showResult(await ref.read(bleProvider.notifier).setFwIdlingTurnOff(v));
+                } : null,
+              ),
+            ],
+          ),
+          const Divider(color: AppColors.panelBorder, height: 24),
+
+          // Distance auto on/off
+          Text('TỰ BẬT/TẮT THEO KHOẢNG CÁCH (bởi xe)', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('Xe tự BẬT khi điện thoại đến gần, TẮT khi ra xa — firmware xử lý qua tín hiệu BLE (chính xác hơn đo RSSI của app).',
+              style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim)),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _buildSegmentOption(label: 'Tắt', desc: '—', isSelected: ble.distanceMode == 0,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setDistanceMode(0);
+                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(0));
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(label: 'Gần', desc: 'Mức 1', isSelected: ble.distanceMode == 1,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setDistanceMode(1);
+                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(1));
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(label: 'Vừa', desc: 'Mức 2', isSelected: ble.distanceMode == 2,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setDistanceMode(2);
+                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(2));
+                },
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(label: 'Xa hơn', desc: 'Mức 3', isSelected: ble.distanceMode == 3,
+                onTap: () async {
+                  ref.read(bleProvider.notifier).setDistanceMode(3);
+                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(3));
+                },
+              ),
+            ],
+          ),
+          const Divider(color: AppColors.panelBorder, height: 24),
+
+          // Thêm thẻ NFC
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.credit_card_rounded, size: 18),
+              label: Text(
+                'THÊM THẺ NFC MỚI',
+                style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+              ),
+              onPressed: connected ? () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppColors.panel,
+                    title: Text('Thêm thẻ NFC mới?', style: GoogleFonts.spaceGrotesk(fontSize: 16)),
+                    content: Text(
+                      'App gửi lệnh đăng ký thẻ xuống xe → bạn quẹt THẺ MỚI vào đầu đọc trên xe trong ~10 giây. Firmware sẽ lưu thẻ vào danh sách mở khóa (card1/card2…).',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12.5, height: 1.4),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bắt đầu')),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  _showResult(await ref.read(bleProvider.notifier).startAddNfcCard());
+                }
+              } : null,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Nâng cao: Tắt BMS + Factory reset BLE.
+  Widget _buildAdvancedCard(BleState ble, bool connected) {
+    return Panel(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Các lệnh nặng — chỉ dùng khi hiểu rõ hậu quả:',
+            style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.amber,
+                side: BorderSide(color: AppColors.amber.withValues(alpha: 0.5)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.battery_alert_rounded, size: 18),
+              label: Text(
+                'TẮT HẲN BMS (ĐỖ LÂU)',
+                style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+              ),
+              onPressed: connected ? () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppColors.panel,
+                    title: Text('Tắt hẳn BMS?', style: GoogleFonts.spaceGrotesk(fontSize: 16)),
+                    content: Text(
+                      'Pin sẽ ngắt hoàn toàn — xe KHÔNG phản hồi Bluetooth cho đến khi bạn bật lại nguồn xe vật lý. Chỉ dùng khi đỗ lâu ngày để bảo toàn pin.',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12.5, height: 1.4),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                      FilledButton(
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Tắt BMS'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  _showResult(await ref.read(bleProvider.notifier).turnOffBms());
+                }
+              } : null,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.error,
+                side: BorderSide(color: AppColors.error.withValues(alpha: 0.5)),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.restart_alt_rounded, size: 18),
+              label: Text(
+                'FACTORY RESET CÀI ĐẶT BLE',
+                style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+              ),
+              onPressed: connected ? () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppColors.panel,
+                    title: Text('Factory reset BLE?', style: GoogleFonts.spaceGrotesk(fontSize: 16)),
+                    content: Text(
+                      'Xóa toàn bộ cài đặt Bluetooth của xe (bond, password, thẻ…? — theo firmware "Factory reset BLE settings"). Sau reset có thể phải ghép lại từ đầu. KHÔNG hoàn tác được.',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12.5, height: 1.4),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                      FilledButton(
+                        style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Reset'),
+                      ),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  _showResult(await ref.read(bleProvider.notifier).factoryResetBle());
+                }
+              } : null,
+            ),
           ),
         ],
       ),

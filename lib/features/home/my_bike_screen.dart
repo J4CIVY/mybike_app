@@ -297,7 +297,8 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
               const SizedBox(height: 16),
 
               // Dynamic Charging Alert Card khi đang sạc
-              if (telemetry.charging != null || telemetry.phase < -0.5) ...[
+              // DƯƠNG = sạc vào pin (âm = xả) — verify session 20261022T212957
+              if (telemetry.charging != null || telemetry.phase > 0.5) ...[
                 GestureDetector(
                   onTap: () => Navigator.of(context).pushNamed('/charging'),
                   child: Container(

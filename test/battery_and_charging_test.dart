@@ -57,10 +57,12 @@ void main() {
   });
 
   group('ChargingRouterService Tests', () {
-    test('Charging detected from negative phase current without mock 220V/36C', () {
+    test('Charging detected from positive phase current without mock 220V/36C', () {
+      // Quy ước dấu verify session 20261022T212957: DƯƠNG = dòng sạc vào pin,
+      // ÂM = xe xả pin (chạy xe -8..-25A kèm điện áp xả 76.8→76.4V).
       final telemetry = BikeLogMsg()
         ..voltage = 84.0
-        ..phase = -15.0; // Dòng nạp 15A
+        ..phase = 15.0; // Dòng nạp 15A
 
       final report = ChargingRouterService.analyzeCharging(telemetry: telemetry);
 
@@ -73,10 +75,10 @@ void main() {
       expect(report.isFetOverheat, isFalse);
     });
 
-    test('Not charging when phase is non-negative and charger is null', () {
+    test('Not charging when phase is non-positive and charger is null', () {
       final telemetry = BikeLogMsg()
-        ..voltage = 84.0
-        ..phase = 10.0; // Xe đang xả dòng kéo tải
+        ..voltage = 76.4
+        ..phase = -10.0; // Xe đang xả dòng kéo tải
 
       final report = ChargingRouterService.analyzeCharging(telemetry: telemetry);
 

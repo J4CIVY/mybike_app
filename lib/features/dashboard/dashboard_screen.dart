@@ -326,7 +326,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 10),
         ],
 
-        if (m.charging != null || m.phase < -0.5) ...[
+        // DƯƠNG = sạc vào pin (âm = xả) — verify session 20261022T212957
+        if (m.charging != null || m.phase > 0.5) ...[
           NoticeBanner(
             color: AppColors.secondary,
             text: '⚡ Xe đang sạc (${m.charging?.power ?? (m.voltage * m.phase.abs()).round()}W) · Chạm để xem ETA',

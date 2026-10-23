@@ -93,6 +93,11 @@ class BleState {
   final int recupLevel; // 0: Nhẹ, 1: Tiêu chuẩn, 2: Mạnh (One-pedal)
   final int throttleResponse; // 0: Êm ái, 1: Tiêu chuẩn, 2: Thể thao
   final int speedLimitMode; // 0: Không giới hạn, 1: 50 km/h, 2: 30 km/h
+  final int eceMode; // 0: Tắt, 1: Chuẩn, 2: Mạnh (firmware ECE_MODE)
+  final int grabMode; // 0: Cá nhân, 1-2: dịch vụ (firmware GRAB_MODE)
+  final bool idlingTurnOff; // tự tắt khi đỗ (firmware IDLING_TURN_OFF)
+  final int distanceMode; // 0=Tắt, 1=Gần, 2=Vừa, 3=Xa hơn (firmware DISTANCE)
+  final int chargingProfile; // 0=Standard, 1=Fast, 2=Boost (firmware CHARGING)
   final String? frameSerial;
 
   const BleState({
@@ -120,6 +125,11 @@ class BleState {
     this.recupLevel = 1,
     this.throttleResponse = 1,
     this.speedLimitMode = 0,
+    this.eceMode = 0,
+    this.grabMode = 0,
+    this.idlingTurnOff = false,
+    this.distanceMode = 0,
+    this.chargingProfile = 0,
     this.frameSerial,
   });
 
@@ -148,6 +158,11 @@ class BleState {
     int? recupLevel,
     int? throttleResponse,
     int? speedLimitMode,
+    int? eceMode,
+    int? grabMode,
+    bool? idlingTurnOff,
+    int? distanceMode,
+    int? chargingProfile,
     String? frameSerial,
   }) =>
       BleState(
@@ -175,6 +190,11 @@ class BleState {
         recupLevel: recupLevel ?? this.recupLevel,
         throttleResponse: throttleResponse ?? this.throttleResponse,
         speedLimitMode: speedLimitMode ?? this.speedLimitMode,
+        eceMode: eceMode ?? this.eceMode,
+        grabMode: grabMode ?? this.grabMode,
+        idlingTurnOff: idlingTurnOff ?? this.idlingTurnOff,
+        distanceMode: distanceMode ?? this.distanceMode,
+        chargingProfile: chargingProfile ?? this.chargingProfile,
         frameSerial: frameSerial ?? this.frameSerial,
       );
 }
@@ -234,6 +254,11 @@ class BleController extends Notifier<BleState> {
   static const _kRecupLevel = 'recup_level';
   static const _kThrottleResponse = 'throttle_response';
   static const _kSpeedLimitMode = 'speed_limit_mode';
+  static const _kEceMode = 'ble_ece_mode';
+  static const _kGrabMode = 'ble_grab_mode';
+  static const _kIdlingTurnOff = 'ble_idling_turn_off';
+  static const _kDistanceMode = 'ble_distance_mode';
+  static const _kChargingProfile = 'ble_charging_profile';
 
   final _rssiKalman = KalmanFilter1D(processNoise: 0.008, measurementNoise: 4.0);
   double? _smoothedRssi;
@@ -256,7 +281,17 @@ class BleController extends Notifier<BleState> {
   }
 
   void _initSavedBike() async {
-    final prefs = await _prefs;
+    final SharedPreferences prefs;
+    try {
+      prefs = await _prefs;
+    } catch (e) {
+      state = state.copyWith(
+        phase: BlePhase.disconnected,
+        message: 'Không đọc được bộ nhớ app (shared_preferences): $e\n'
+            '→ Gỡ app rồi cài lại APK mới.',
+      );
+      return;
+    }
     final savedName = prefs.getString(_kLastBikeName);
     final savedId = prefs.getString(_kLastBikeId);
     final autoLock = prefs.getBool(_kAutoLockWalkAway) ?? false;
@@ -267,6 +302,11 @@ class BleController extends Notifier<BleState> {
     final recup = prefs.getInt(_kRecupLevel) ?? 1;
     final throttle = prefs.getInt(_kThrottleResponse) ?? 1;
     final speedLimit = prefs.getInt(_kSpeedLimitMode) ?? 0;
+    final eceM = prefs.getInt(_kEceMode) ?? 0;
+    final grabM = prefs.getInt(_kGrabMode) ?? 0;
+    final idlingOff = prefs.getBool(_kIdlingTurnOff) ?? false;
+    final distM = prefs.getInt(_kDistanceMode) ?? 0;
+    final chargeP = prefs.getInt(_kChargingProfile) ?? 0;
     state = state.copyWith(
       bikeName: (savedId != null && savedName != null) ? savedName : state.bikeName,
       autoLockWalkAway: autoLock,
@@ -277,6 +317,11 @@ class BleController extends Notifier<BleState> {
       recupLevel: recup,
       throttleResponse: throttle,
       speedLimitMode: speedLimit,
+      eceMode: eceM,
+      grabMode: grabM,
+      idlingTurnOff: idlingOff,
+      distanceMode: distM,
+      chargingProfile: chargeP,
     );
     // Tự động kết nối ngay khi mở app nếu đã từng kết nối xe trước đó
     if (savedId != null && savedId.isNotEmpty) {
@@ -318,6 +363,193 @@ class BleController extends Notifier<BleState> {
     BleLogger.instance.event('driver_profile_speed_mode_set_local', {'mode': val});
   }
 
+  /// Cache local cho UI (ghi thật xuống xe = setFwEceMode).
+  Future<void> setEceMode(int val) async {
+    final prefs = await _prefs;
+    await prefs.setInt(_kEceMode, val);
+    state = state.copyWith(eceMode: val);
+  }
+
+  /// Cache local cho UI (ghi thật xuống xe = setFwGrabMode).
+  Future<void> setGrabMode(int val) async {
+    final prefs = await _prefs;
+    await prefs.setInt(_kGrabMode, val);
+    state = state.copyWith(grabMode: val);
+  }
+
+  /// Cache local cho UI (ghi thật xuống xe = setFwIdlingTurnOff).
+  Future<void> setIdlingTurnOff(bool val) async {
+    final prefs = await _prefs;
+    await prefs.setBool(_kIdlingTurnOff, val);
+    state = state.copyWith(idlingTurnOff: val);
+  }
+
+  /// Cache local cho UI (ghi thật xuống xe = setFwChargingProfile).
+  Future<void> setChargingProfile(int val) async {
+    final prefs = await _prefs;
+    await prefs.setInt(_kChargingProfile, val);
+    state = state.copyWith(chargingProfile: val);
+  }
+
+  /// Cache local cho UI (ghi thật xuống xe = setFwDistanceMode).
+  Future<void> setDistanceMode(int val) async {
+    final prefs = await _prefs;
+    await prefs.setInt(_kDistanceMode, val);
+    state = state.copyWith(distanceMode: val);
+  }
+
+  // ------------------------------------------------------------------
+  // SETTINGS THẬT — service MASTER_CONFIG f7e2c8a1 (protected write)
+  // ------------------------------------------------------------------
+
+  /// Ghi 1 lệnh setting xuống xe: protected write [counter][data][tag4]
+  /// lên char trong service MASTER_CONFIG. Đọc giá trị hiện tại trước
+  /// (log để đối chiếu) rồi ghi. Trả về thông điệp kết quả cho UI.
+  Future<String> _writeSetting(String uuid, List<int> data, String label) async {
+    if (state.phase != BlePhase.connected || !state.isAuthorized) {
+      return 'Xe chưa kết nối/xác thực — không ghi được $label';
+    }
+    final c = _findCharacteristic(uuid);
+    if (c == null) {
+      BleLogger.instance.event('setting_write_err', {
+        'char': uuid, 'label': label, 'error': 'char not found',
+      });
+      return 'Xe không expose characteristic $label';
+    }
+    if (_sessionKey == null) {
+      return 'Chưa có session key — không ghi được $label';
+    }
+    // Đọc giá trị hiện tại để log đối chiếu (char trả cipher khi session sống)
+    try {
+      final cur = await c.read().timeout(
+          const Duration(milliseconds: 1200), onTimeout: () => Uint8List(0));
+      final dec = (cur.length >= 4)
+          ? BikeSessionCrypto.decryptProtectedRead(
+              sessionKey: _sessionKey!,
+              characteristicUuid: uuid,
+              response: cur,
+            )
+          : Uint8List(0);
+      BleLogger.instance.event('setting_read_current', {
+        'char': uuid,
+        'label': label,
+        'hex': BleLogger.hex(cur, maxBytes: 48),
+        'dec_hex': dec.isEmpty ? '' : BleLogger.hex(dec, maxBytes: 48),
+        'dec_utf8': BleLogger.tryUtf8(dec) ?? '',
+      });
+    } catch (_) {}
+    try {
+      final frame = BikeSessionCrypto.buildProtectedWrite(
+        sessionKey: _sessionKey!,
+        counter: _writeCounter++,
+        characteristicUuid: uuid,
+        data: data,
+      );
+      await c.write(frame, withoutResponse: false);
+      BleLogger.instance.event('setting_write', {
+        'char': uuid,
+        'label': label,
+        'data': String.fromCharCodes(data),
+        'counter': _writeCounter - 1,
+      });
+      return 'Đã ghi $label xuống xe (${String.fromCharCodes(data)})';
+    } catch (e) {
+      BleLogger.instance.event('setting_write_err', {
+        'char': uuid, 'label': label, 'error': '$e',
+      });
+      return 'Lỗi ghi $label: $e';
+    }
+  }
+
+  /// Giới hạn tốc độ THẬT — mode 0..3 ('0'..'3' ASCII, firmware onWriteSpeedLimit).
+  Future<String> setFwSpeedLimit(int mode) =>
+      _writeSetting(Gatt.speedLimitChar, [0x30 + (mode.clamp(0, 3))], 'giới hạn tốc độ');
+
+  /// Chế độ ECE — mode 0..2.
+  Future<String> setFwEceMode(int mode) =>
+      _writeSetting(Gatt.eceModeChar, [0x30 + (mode.clamp(0, 2))], 'chế độ ECE');
+
+  /// Chế độ Grab — mode 0..2.
+  Future<String> setFwGrabMode(int mode) =>
+      _writeSetting(Gatt.grabModeChar, [0x30 + (mode.clamp(0, 2))], 'chế độ Grab');
+
+  /// Tự tắt xe khi đỗ — '1' bật / '0' tắt.
+  Future<String> setFwIdlingTurnOff(bool on) =>
+      _writeSetting(Gatt.idlingTurnOffChar, [on ? 0x31 : 0x30], 'tự tắt khi đỗ');
+
+  /// Tự bật/tắt theo khoảng cách BLE — 0=Tắt, 1=Gần, 2=Vừa, 3=Xa hơn.
+  /// XE tự xử lý (setDistanceLimit) — chính xác hơn auto-lock RSSI của app.
+  Future<String> setFwDistanceMode(int level) =>
+      _writeSetting(Gatt.distanceChar, [0x30 + (level.clamp(0, 3))], 'khoảng cách tự bật/tắt');
+
+  /// Chọn profile sạc — 0=Standard, 1=Fast, 2=Boost.
+  Future<String> setFwChargingProfile(int profile) =>
+      _writeSetting(Gatt.chargingProfileChar, [0x30 + (profile.clamp(0, 2))], 'profile sạc');
+
+  /// Bắt đầu đăng ký thẻ NFC mới — user quẹt thẻ vào xe trong ~10s
+  /// (firmware RfidCardManager: "Adding new card...").
+  Future<String> startAddNfcCard() async {
+    final r = await _writeSetting(Gatt.addCardChar, [0x31], 'thêm thẻ NFC');
+    return '$r\n👉 Quẹt thẻ MỚI vào đầu đọc trên xe trong ~10 giây…';
+  }
+
+  /// Tắt hẳn BMS — chỉ dùng khi đỗ lâu (nguy hiểm: phải mở ca-pô/bật lại xe).
+  Future<String> turnOffBms() =>
+      _writeSetting(Gatt.turnOffBmsChar, [0x31], 'tắt BMS');
+
+  /// Factory reset cài đặt BLE của xe (firmware: "Factory reset BLE settings").
+  Future<String> factoryResetBle() =>
+      _writeSetting(Gatt.resetBleChar, [0x31], 'factory reset BLE');
+
+  /// Đặt tên xe (firmware: "Set new name: %s").
+  Future<String> setFwBikeName(String name) {
+    final trimmed = name.trim();
+    final bytes = utf8.encode(trimmed.substring(0, trimmed.length > 20 ? 20 : trimmed.length));
+    return _writeSetting(Gatt.bikeNameChar, bytes, 'tên xe');
+  }
+
+  /// Đọc UUID char còi HIỆN TẠI của xe từ char cấu hình 88c30d2c
+  /// (firmware setBeepUUID: "Set new beepUUID: %s" — còi là UUID cấu hình
+  /// được, lưu flash xe; char trả cipher khi session sống → decrypt).
+  Future<String?> readBeepUuid() async {
+    if (state.phase != BlePhase.connected) return null;
+    final c = _findCharacteristic(Gatt.beepUuidChar);
+    if (c == null) return null;
+    try {
+      final raw = await c.read().timeout(
+          const Duration(milliseconds: 1200), onTimeout: () => Uint8List(0));
+      if (raw.isEmpty) return null;
+      BleLogger.instance.event('beep_uuid_read', {
+        'hex': BleLogger.hex(raw, maxBytes: 48),
+      });
+      String? s;
+      if (_sessionKey != null && raw.length >= 4) {
+        final dec = BikeSessionCrypto.decryptProtectedRead(
+          sessionKey: _sessionKey!,
+          characteristicUuid: Gatt.beepUuidChar,
+          response: raw,
+        );
+        s = dec.isEmpty ? null : BleLogger.tryUtf8(dec);
+        if (s != null) {
+          BleLogger.instance.event('beep_uuid_read', {'dec_utf8': s});
+        }
+      }
+      s ??= BleLogger.tryUtf8(raw);
+      if (s == null) return null;
+      final uuidRe = RegExp(
+          r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$');
+      if (uuidRe.hasMatch(s.trim())) {
+        return s.trim();
+      }
+      // Giá trị ngắn (vd 'beep') — char còi có thể là chuỗi ngắn do fw tự đặt
+      BleLogger.instance.event('beep_uuid_value', {'value': s.trim()});
+      return null;
+    } catch (e) {
+      BleLogger.instance.event('beep_uuid_read_err', {'error': '$e'});
+      return null;
+    }
+  }
+
   Future<String?> readDeviceSerial() async {
     final dev = _device;
     if (dev == null || state.phase != BlePhase.connected) return null;
@@ -325,21 +557,54 @@ class BleController extends Notifier<BleState> {
     if (c == null) return null;
     try {
       final raw = await c.read();
-      // Loại bỏ null bytes (\x00) và các ký tự điều khiển (control chars/newline)
-      final serial = utf8
+      // Log raw hex để nghiên cứu offline (serial có thể bị mã hóa session)
+      BleLogger.instance.event('device_serial_read_raw', {
+        'len': raw.length,
+        'hex': BleLogger.hex(raw),
+      });
+
+      String? best;
+
+      // (a) Giải mã protected read — char này trả cipher nếu session đang sống
+      if (_sessionKey != null && raw.length >= 4) {
+        try {
+          final dec = BikeSessionCrypto.decryptProtectedRead(
+            sessionKey: _sessionKey!,
+            characteristicUuid: Gatt.deviceSerialChar,
+            response: raw,
+          );
+          if (dec.isNotEmpty) {
+            BleLogger.instance.event('device_serial_read_decrypted', {
+              'hex': BleLogger.hex(dec),
+            });
+            final s = BleLogger.tryUtf8(dec);
+            if (s != null && s.trim().isNotEmpty) best = s.trim();
+          }
+        } catch (_) {}
+      }
+
+      // (b) Plain UTF-8 (strip control chars) — dùng khi char trả text thô
+      final plain = utf8
           .decode(raw, allowMalformed: true)
           .replaceAll(RegExp(r'[\x00-\x1F\x7F-\x9F]'), '')
           .trim();
-      BleLogger.instance.event('device_serial_read', {'serial': serial});
-      if (serial.isNotEmpty) {
-        state = state.copyWith(frameSerial: serial);
-        return serial;
+      // Ưu tiên kết quả decrypt nếu plain toàn rác mã hóa (tỷ lệ ký tự lạ cao)
+      final printable =
+          plain.isEmpty ? 0.0 : plain.runes.where((r) => r >= 32 && r <= 126).length / plain.runes.length;
+      if (best == null || (plain.isNotEmpty && printable > 0.85 && plain.length >= 4)) {
+        best = (printable > 0.85 && plain.isNotEmpty) ? plain : best;
       }
-      return null;
-    } catch (e) {
-      BleLogger.instance.event('device_serial_read_err', {'error': '$e'});
-      return null;
-    }
+
+      BleLogger.instance.event('device_serial_read', {
+        'serial': best ?? '',
+        'source': (best == plain && best != null) ? 'plain' : (best != null ? 'decrypted' : 'none'),
+      });
+      if (best != null && best.isNotEmpty) {
+        state = state.copyWith(frameSerial: best);
+        return best;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> setAutoLockWalkAway(bool val) async {
@@ -407,6 +672,20 @@ class BleController extends Notifier<BleState> {
       'device_id': device.remoteId.str,
       'name': name ?? device.platformName,
     });
+    // Health-check storage trước khi vào BLE: shared_preferences hỏng (vd
+    // NoSuchMethodError getAll khi cài đè APK bẩn) sẽ nổ ngay trong handshake
+    // khi đọc password đã lưu — phải báo đúng bệnh thay vì "kết nối xe thất bại".
+    try {
+      await _prefs;
+    } catch (e) {
+      BleLogger.instance.event('prefs_broken', {'error': '$e'});
+      state = state.copyWith(
+        phase: BlePhase.disconnected,
+        message: 'Không đọc được bộ nhớ app (shared_preferences): $e\n'
+            '→ Gỡ app rồi cài lại APK mới.',
+      );
+      return;
+    }
     // Auth bị từ chối sau kill-app: xe giữ session-lock một khoảng ngắn
     // (quan sát thực tế: còn khoá ở +10s, mở ở +35s). DÒ DẦY mỗi 3s (15 vòng
     // ≈ 45s) để vào ngay khoảnh khắc xe mở khoá — app gốc cũng chỉ nhanh vì
@@ -433,10 +712,11 @@ class BleController extends Notifier<BleState> {
       var ok = false;
       try {
         ok = await _establish(device);
-      } catch (_) {
+      } catch (e) {
+        BleLogger.instance.event('establish_err', {'cycle': cycle, 'error': '$e'});
         ok = false;
       }
-      if (ok) {
+      if (ok && state.isAuthorized) {
         await _saveLastBike(device, name);
         _watchConnection(device);
         state = state.copyWith(phase: BlePhase.connected, message: null);
@@ -450,15 +730,17 @@ class BleController extends Notifier<BleState> {
     }
     if (recovered) return;
     try {
-      await _establish(device);
-      await _saveLastBike(device, name);
-      _watchConnection(device);
-      state = state.copyWith(phase: BlePhase.connected, message: null);
-      unawaited(ForegroundService.start(
-        title: 'Dat Bike: ${state.bikeName ?? device.platformName}',
-        text: 'Đã kết nối Bluetooth — Sẵn sàng điều khiển',
-      ));
-      _failStreak = 0;
+      final ok = await _establish(device);
+      if (ok && state.isAuthorized) {
+        await _saveLastBike(device, name);
+        _watchConnection(device);
+        state = state.copyWith(phase: BlePhase.connected, message: null);
+        unawaited(ForegroundService.start(
+          title: 'Dat Bike: ${state.bikeName ?? device.platformName}',
+          text: 'Đã kết nối Bluetooth — Sẵn sàng điều khiển',
+        ));
+        _failStreak = 0;
+      }
     } catch (e) {
       BleLogger.instance.event('connect_failed', {'error': '$e'});
       state = state.copyWith(
@@ -985,7 +1267,17 @@ class BleController extends Notifier<BleState> {
     if (state.phase == BlePhase.connected || state.phase == BlePhase.connecting) return true;
     _restoreBusy = true;
     try {
-      final prefs = await _prefs;
+      final SharedPreferences prefs;
+      try {
+        prefs = await _prefs;
+      } catch (e) {
+        state = state.copyWith(
+          phase: BlePhase.disconnected,
+          message: 'Không đọc được bộ nhớ app (shared_preferences): $e\n'
+              '→ Gỡ app rồi cài lại APK mới.',
+        );
+        return false;
+      }
       final id = prefs.getString(_kLastBikeId);
       if (id == null || id.isEmpty) {
         return false;
@@ -1287,9 +1579,12 @@ class BleController extends Notifier<BleState> {
     }
 
     final localTime = customTime ?? DateTime.now();
-    final utcTime = localTime.toUtc();
-    final totalSecondsUtc = (utcTime.hour * 3600) + (utcTime.minute * 60) + utcTime.second;
-    final payload = utf8.encode(totalSecondsUtc.toString());
+    // Firmware hiển thị GIỜ ĐỊA PHƯƠNG: capture app gốc ghi '58607' = 16:16:47
+    // local (btsnoop 16:16:34). KHÔNG convert UTC — bản cũ gửi UTC khiến đồng
+    // hồ xe lệch -7h (UTC+7).
+    final totalSecondsLocal =
+        (localTime.hour * 3600) + (localTime.minute * 60) + localTime.second;
+    final payload = utf8.encode(totalSecondsLocal.toString());
 
     final timeChar = _findCharacteristic(Gatt.currentTimeChar);
     if (timeChar == null) {
@@ -1308,7 +1603,7 @@ class BleController extends Notifier<BleState> {
         await timeChar.write(frame, withoutResponse: false);
         BleLogger.instance.event('sync_time_success', {
           'type': 'protected',
-          'secondsUtc': totalSecondsUtc,
+          'secondsLocal': totalSecondsLocal,
           'timeLocal': localTime.toIso8601String(),
           'counter': _writeCounter - 1,
         });
@@ -1316,7 +1611,7 @@ class BleController extends Notifier<BleState> {
         await timeChar.write(payload, withoutResponse: false);
         BleLogger.instance.event('sync_time_success', {
           'type': 'plain',
-          'secondsUtc': totalSecondsUtc,
+          'secondsLocal': totalSecondsLocal,
           'timeLocal': localTime.toIso8601String(),
         });
       }
@@ -1413,57 +1708,82 @@ class BleController extends Notifier<BleState> {
   }
 
   Future<void> _sendFindBikeSignal(String val) async {
-    // Lệnh tìm xe (đánh kèn/hú còi) theo chuẩn Dat Bike:
-    // 1. Characteristic chính BEEP_ACTIVE_CHAR_UUID / getCharFindBikeUuid:
-    //    350d9a82-b3f3-4213-bdda-6403be495f53 trong Info Service (d4905f67).
-    //    App gốc gọi makeWriter(BEEP_ACTIVE_CHAR_UUID)(device, '1') để bật còi, '0' để tắt còi.
-    // 2. Alert/Beep Service (5b6d1069-a0bc-4875-ba5b-fdc94647d918):
-    //    e0b2b4b4-4b1e-4f3e-8f1e-6b3e4b4b4b4b (Write có response)
-    //    và các characteristic phụ (07765f94, 68311857, 46a7b351, 4244dedb).
+    // CÒI CỦA XE LÀ UUID CẤU HÌNH ĐƯỢC (firmware setBeepUUID: "Set new
+    // beepUUID: %s" — lưu flash xe). Char 88c30d2c đọc/đặt UUID này.
+    // App gốc 4.5.0: findBike dùng BEEP_ACTIVE_CHAR_UUID = UNDEFINED (decode
+    // index âm — code chết!) còn writeBeepUuid(uuid,...) nhận UUID động.
+    // Chiến lược: (1) đọc beep UUID cấu hình → ghi '1' protected lên ĐÚNG char
+    // đó; (2) fallback 87efab0d (BEEP_SCAN) protected; (3) fallback plain.
+    final dataAscii = val.codeUnits;
 
-    final dataAscii = val.codeUnits; // [0x31] ('1') hoặc [0x30] ('0')
-    bool sentSuccess = false;
-
-    // TUYỆT ĐỐI KHÔNG ghi vào 350d9a82 (powerSwitchChar) vì đây là công tắc nguồn xe!
-    // Ghi thử nghiệm vào Alert / Beep Service 5b6d1069:
-
-    // Delay nhỏ 100ms giữa các service để CAN bus/MCU xử lý êm
-    await Future.delayed(const Duration(milliseconds: 100));
-
-    // 2. Ghi thêm lên Beep / Alert Service 5b6d1069 (e0b2b4b4 và các phụ):
-    for (final c in state.characteristics) {
-      final uuid = c.uuid.str128.toLowerCase();
-      if (uuid == Gatt.beepMainChar.toLowerCase()) {
+    // (1) UUID còi cấu hình trong flash xe
+    final beepUuid = await readBeepUuid();
+    if (beepUuid != null && beepUuid != Gatt.beepScanChar) {
+      final c = _findCharacteristic(beepUuid);
+      if (c != null && _sessionKey != null) {
         try {
-          await c.write(dataAscii, withoutResponse: false);
-          BleLogger.instance.event('find_bike_beep_main_success', {
-            'target': c.uuid.str128,
+          final frame = BikeSessionCrypto.buildProtectedWrite(
+            sessionKey: _sessionKey!,
+            counter: _writeCounter++,
+            characteristicUuid: beepUuid,
+            data: dataAscii,
+          );
+          await c.write(frame, withoutResponse: false);
+          BleLogger.instance.event('find_bike_beep_configured', {
+            'target': beepUuid,
             'val': val,
           });
-          sentSuccess = true;
+          return;
         } catch (e) {
-          try {
-            await c.write(dataAscii, withoutResponse: true);
-            sentSuccess = true;
-          } catch (_) {}
-        }
-      } else if (uuid == '07765f94-d850-4e87-a2cf-6bae5d9a0b67' ||
-          uuid == '68311857-4f93-4060-a42d-16da35a5843c' ||
-          uuid == '46a7b351-9343-4774-a306-6b533899344a' ||
-          uuid == '4244dedb-7b6b-4774-9525-d37fde1c67da') {
-        try {
-          await c.write(dataAscii, withoutResponse: true);
-          BleLogger.instance.event('find_bike_aux_success', {
-            'target': c.uuid.str128,
-            'val': val,
+          BleLogger.instance.event('find_bike_beep_configured_err', {
+            'target': beepUuid, 'error': '$e',
           });
-        } catch (_) {}
+        }
       }
     }
 
-    BleLogger.instance.event('find_bike_result', {
+    // (2) BEEP_SCAN 87efab0d — protected write (path makeWriter của app gốc)
+    final c = _findCharacteristic(Gatt.beepScanChar) ??
+        _findCharacteristic(Gatt.sessionUuid);
+    if (c == null) {
+      BleLogger.instance.event('find_bike_char_missing', {
+        'target': Gatt.beepScanChar,
+      });
+      return;
+    }
+
+    if (_sessionKey != null) {
+      try {
+        final frame = BikeSessionCrypto.buildProtectedWrite(
+          sessionKey: _sessionKey!,
+          counter: _writeCounter++,
+          characteristicUuid: c.uuid.str128,
+          data: dataAscii,
+        );
+        await c.write(frame, withoutResponse: false);
+        BleLogger.instance.event('find_bike_beep_protected', {
+          'target': c.uuid.str128,
+          'val': val,
+          'counter': _writeCounter - 1,
+        });
+        return;
+      } catch (e) {
+        BleLogger.instance.event('find_bike_beep_protected_err', {
+          'target': c.uuid.str128,
+          'error': '$e',
+        });
+      }
+    }
+
+    // (3) Fallback plain write
+    try {
+      await c.write(dataAscii, withoutResponse: false);
+    } catch (_) {
+      await c.write(dataAscii, withoutResponse: true);
+    }
+    BleLogger.instance.event('find_bike_beep_success', {
+      'target': c.uuid.str128,
       'val': val,
-      'success': sentSuccess,
     });
   }
 

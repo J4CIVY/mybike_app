@@ -512,12 +512,15 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
               ),
               const Spacer(),
               if (hasCells && _selectedCellIndex != null && _selectedCellIndex! < cells.length)
-                Text(
-                  'Cell #${_selectedCellIndex! + 1}: ${cells[_selectedCellIndex!].toStringAsFixed(3)} V',
-                  style: GoogleFonts.spaceGrotesk(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary,
+                Flexible(
+                  child: Text(
+                    'Cell #${_selectedCellIndex! + 1}: ${cells[_selectedCellIndex!].toStringAsFixed(3)} V',
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.spaceGrotesk(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.primary,
+                    ),
                   ),
                 )
               else if (hasCells)
@@ -594,48 +597,53 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                         });
                       },
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 1.5),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          if (isSelected || isLowest || isHighest)
-                            Container(
-                              margin: const EdgeInsets.only(bottom: 2),
-                              width: 6,
-                              height: 6,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: barColor,
-                              ),
-                            ),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.bottomCenter,
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 300),
-                                height: 110 * normalized,
+                        padding: const EdgeInsets.symmetric(horizontal: 1),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            if (isSelected || isLowest || isHighest)
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 2),
+                                width: 6,
+                                height: 6,
                                 decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
                                   color: barColor,
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
-                                  border: isSelected
-                                      ? Border.all(color: Colors.white, width: 1.5)
-                                      : null,
+                                ),
+                              ),
+                            Expanded(
+                              child: Align(
+                                alignment: Alignment.bottomCenter,
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 300),
+                                  height: 110 * normalized,
+                                  decoration: BoxDecoration(
+                                    color: barColor,
+                                    borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                                    border: isSelected
+                                        ? Border.all(color: Colors.white, width: 1.5)
+                                        : null,
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${idx + 1}',
-                            style: GoogleFonts.spaceGrotesk(
-                              fontSize: 9,
-                              fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
-                              color: isSelected ? AppColors.primary : AppColors.textDim,
+                            const SizedBox(height: 6),
+                            // FittedBox: 23-24 cell → mỗi cột chỉ ~10px, nhãn
+                            // 2 chữ số phải tự thu nhỏ để không đè lên nhau.
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                '${idx + 1}',
+                                style: GoogleFonts.spaceGrotesk(
+                                  fontSize: 9,
+                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w500,
+                                  color: isSelected ? AppColors.primary : AppColors.textDim,
+                                ),
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
                   ),
                 );
               }),
