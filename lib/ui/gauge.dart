@@ -1,3 +1,7 @@
+// Gauge tốc độ kỹ thuật số Kinetic Stitch EV:
+// Vạch chia độ chuẩn xác, đường ray hairline thanh thoát, gradient Electric Azure & Cyan,
+// hiển thị số km/h bằng Space Grotesk với tabular figures chống rung giật khi tăng tốc.
+
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -5,7 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'app_theme.dart';
 
 class SpeedGauge extends StatelessWidget {
-  final double speed;
+  final double speed; // km/h
   final double maxSpeed;
   final Widget? center;
   final double size;
@@ -72,8 +76,8 @@ class _KineticGaugePainter extends CustomPainter {
   final double progress;
   _KineticGaugePainter({required this.progress});
 
-  static const _start = 140 * pi / 180;
-  static const _sweep = 260 * pi / 180;
+  static const _start = 140 * pi / 180; // 140°
+  static const _sweep = 260 * pi / 180; // tới 400°
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -84,6 +88,7 @@ class _KineticGaugePainter extends CustomPainter {
     final radius = size.width / 2 - margin;
     final rect = Rect.fromCircle(center: center, radius: radius);
 
+    // 1. Đường ray viền ngoài hairline mảnh
     final outerRing = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.0
@@ -96,6 +101,7 @@ class _KineticGaugePainter extends CustomPainter {
       outerRing,
     );
 
+    // 2. Track rãnh nền chính (soft container fill)
     final track = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = strokeTrack
@@ -103,6 +109,7 @@ class _KineticGaugePainter extends CustomPainter {
       ..color = AppColors.panelSecondary;
     canvas.drawArc(rect, _start, _sweep, false, track);
 
+    // 3. Vạch khía (Tick marks) chia độ 0 -> 100 km/h
     final tickPaint = Paint()
       ..color = AppColors.panelBorderBright
       ..strokeWidth = (1.2 * scale).clamp(0.8, 1.5);
@@ -125,8 +132,9 @@ class _KineticGaugePainter extends CustomPainter {
       canvas.drawLine(p1, p2, t <= progress ? activeTickPaint : tickPaint);
     }
 
+    // 4. Thanh tốc độ tiến độ (Progress bar) Electric Azure & Cyan
     if (progress > 0.01) {
-
+      // Glow nhẹ chuẩn Kinetic Stitch
       final glowWidth = (14.0 * scale).clamp(8.0, 16.0);
       final glow = Paint()
         ..style = PaintingStyle.stroke
@@ -148,6 +156,7 @@ class _KineticGaugePainter extends CustomPainter {
         ).createShader(rect);
       canvas.drawArc(rect, _start, _sweep * progress, false, bar);
 
+      // Điểm chỉ báo đầu kim (Tip pointer)
       final tipAngle = _start + _sweep * progress;
       final tipPoint = Offset(center.dx + radius * cos(tipAngle), center.dy + radius * sin(tipAngle));
       final tipDotRadius = (5.0 * scale).clamp(3.5, 6.0);

@@ -43,7 +43,7 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('CÀI ĐẶT XE & HIỆU NĂNG'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
   });
 
   testWidgets('VehicleSettingsScreen handles long frame serial without breaking layout', (tester) async {

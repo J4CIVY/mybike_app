@@ -1,5 +1,10 @@
+// Scan — Quét BLE tìm xe Dat Bike (Kinetic Stitch EV).
+// Xe dùng RPA (MAC xoay vòng) và tên quảng bá thay đổi ('dat.bik3' / 'Dat Bike Quantum S1'),
+// giao diện sáng sủa, thẻ trắng viền hairline, chỉ thị RSSI trực quan.
+
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,6 +63,13 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       _error = null;
       _scanning = true;
     });
+
+    if (kIsWeb) {
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (!mounted) return;
+      setState(() => _scanning = false);
+      return;
+    }
 
     final ok = await BlePermissions.ensure();
     if (!ok) {
@@ -119,7 +131,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         : r.device.platformName;
     Navigator.of(context).pushReplacementNamed('/connecting', arguments: {
       'device': r.device,
-      'name': name.isEmpty ? 'My Bike' : name,
+      'name': name.isEmpty ? 'Dat Bike' : name,
     });
   }
 
@@ -129,7 +141,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     final dev = BluetoothDevice.fromId(_lastBikeId!);
     Navigator.of(context).pushReplacementNamed('/connecting', arguments: {
       'device': dev,
-      'name': _lastBikeName ?? 'My Bike',
+      'name': _lastBikeName ?? 'Dat Bike',
     });
   }
 
@@ -201,7 +213,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           children: [
-
+            // Kết nối lại xe đã nhớ
             if (_lastBikeId != null) ...[
               Panel(
                 onTap: _directConnecting ? null : _connectDirect,
@@ -261,6 +273,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
               const SizedBox(height: 14),
             ],
 
+            // Xe tìm thấy
             if (bikes.isNotEmpty) ...[
               const SectionTitle('XE CỦA BẠN PHÁT HIỆN ĐƯỢC'),
               const SizedBox(height: 10),
@@ -330,7 +343,88 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                 ),
             ],
 
-            if (bikes.isEmpty && !_scanning) ...[
+            // Xe phát hiện trên Web Preview (Mô phỏng quét BLE)
+            if (kIsWeb) ...[
+              const SectionTitle('XE CỦA BẠN PHÁT HIỆN ĐƯỢC (BLE)'),
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Panel(
+                  onTap: () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Đã xác thực & ghép đôi chìa khóa số BLE xe Dat Bike Quantum S1!',
+                          style: GoogleFonts.plusJakartaSans(),
+                        ),
+                        backgroundColor: const Color(0xFF10B981),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                    Navigator.of(context).pop();
+                  },
+                  padding: const EdgeInsets.all(16),
+                  borderRadius: 20,
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 50,
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: AppColors.secondary.withValues(alpha: 0.10),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
+                        ),
+                        child: const Icon(Icons.electric_moped_rounded, color: AppColors.secondary, size: 28),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Dat Bike Quantum S1',
+                              style: GoogleFonts.spaceGrotesk(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 16,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                const Text(
+                                  '▂▄▆█',
+                                  style: TextStyle(
+                                    color: AppColors.tertiary,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w900,
+                                    fontFamily: 'monospace',
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  '-58 dBm · RL9C4NGSSSCC00187',
+                                  style: GoogleFonts.plusJakartaSans(
+                                    fontSize: 12,
+                                    color: AppColors.textDim,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.primary),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Gợi ý khi chưa thấy
+            if (bikes.isEmpty && !_scanning && !kIsWeb) ...[
               Panel(
                 padding: const EdgeInsets.all(24),
                 borderRadius: 20,
@@ -377,6 +471,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
               const SizedBox(height: 16),
             ],
 
+            // Thiết bị khác
             const SizedBox(height: 8),
             Row(
               children: [

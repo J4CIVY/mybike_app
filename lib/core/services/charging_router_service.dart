@@ -1,6 +1,6 @@
 // Bộ Giám Sát & Phân Tích Thông Số Sạc Xe Điện Dat Bike
 //
-// 1. Nhận diện trạng thái sạc: Phát hiện dòng nạp âm (telemetry.phase < -0.5A) và gói tin ChargerLogMsg.
+// 1. Nhận diện trạng thái sạc: Dòng điện DƯƠNG đi vào pack (telemetry.phase > +0.5A) hoặc gói tin ChargerLogMsg.
 // 2. Tính toán công suất sạc thực tế: P = V_pack * I_nạp.
 // 3. Bộ đếm thời gian thông minh Smart ETA: Ước lượng thời gian sạc tới mốc an toàn 80% và 100%.
 // 4. Minh bạch thông số: Điện áp lưới Vin RMS & Nhiệt củ sạc chỉ hiển thị khi có dữ liệu từ trạm/bộ sạc thông minh.

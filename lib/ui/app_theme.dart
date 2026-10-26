@@ -1,47 +1,57 @@
+// Theme "Kinetic Stitch EV" — Thiết kế giao diện xe điện thế hệ mới.
+// Nền sáng tinh khôi (Luminous Canvas #FAF8FF), thẻ trắng nguyên bản (#FFFFFF) viền hairline mảnh (#E2E8F0),
+// tương phản sâu (Deep Slate #0F172A), accent xanh điện (Electric Azure #0284C7 & Cyan #0EA5E9),
+// kết hợp Space Grotesk (chỉ số & telemetry) và Plus Jakarta Sans (nội dung & điều khiển).
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   AppColors._();
 
-  static const surface = Color(0xFFFAF8FF);
-  static const surfaceDim = Color(0xFFD2D9F4);
-  static const surfaceBright = Color(0xFFFAF8FF);
+  // Surface System (EV Companion Clean Aesthetic)
+  static const surface = Color(0xFFF8F9FA);
+  static const surfaceDim = Color(0xFFE2E8F0);
+  static const surfaceBright = Color(0xFFF8F9FA);
   static const surfaceContainerLowest = Color(0xFFFFFFFF);
-  static const surfaceContainerLow = Color(0xFFF2F3FF);
-  static const surfaceContainer = Color(0xFFEAEDFF);
-  static const surfaceContainerHigh = Color(0xFFE2E7FF);
-  static const surfaceContainerHighest = Color(0xFFDAE2FD);
-  static const surfaceVariant = Color(0xFFDAE2FD);
+  static const surfaceContainerLow = Color(0xFFF8FAFC);
+  static const surfaceContainer = Color(0xFFF1F5F9);
+  static const surfaceContainerHigh = Color(0xFFE2E8F0);
+  static const surfaceContainerHighest = Color(0xFFCBD5E1);
+  static const surfaceVariant = Color(0xFFF1F5F9);
 
-  static const bg = Color(0xFFFAF8FF);
+  // Background & Panels
+  static const bg = Color(0xFFF8F9FA);
   static const panel = Color(0xFFFFFFFF);
-  static const panelSecondary = Color(0xFFF1F5F9);
-  static const panelBorder = Color(0xFFE2E8F0);
-  static const panelBorderBright = Color(0xFFCBD5E1);
-  static const borderSubtle = Color(0xFFF1F3F5);
+  static const panelSecondary = Color(0xFFF8FAFC);
+  static const panelBorder = Color(0xFFF1F5F9);
+  static const panelBorderBright = Color(0xFFE2E8F0);
+  static const borderSubtle = Color(0xFFF1F5F9);
 
-  static const primary = Color(0xFF0284C7);
-  static const primaryContainer = Color(0xFF007BB9);
+  // Core Brand Colors
+  static const primary = Color(0xFF2563EB); // Electric Azure Blue
+  static const primaryContainer = Color(0xFF1D4ED8);
   static const onPrimary = Color(0xFFFFFFFF);
   static const onPrimaryContainer = Color(0xFFFDFCFF);
 
-  static const secondary = Color(0xFF0EA5E9);
+  static const secondary = Color(0xFF0EA5E9); // Energy Hue Accent
   static const secondaryContainer = Color(0xFF39B8FD);
   static const onSecondary = Color(0xFFFFFFFF);
   static const onSecondaryContainer = Color(0xFF004666);
 
-  static const tertiary = Color(0xFF10B981);
+  static const tertiary = Color(0xFF10B981); // Eco / Optimal Charging / Battery Health
   static const tertiaryContainer = Color(0xFF00855B);
   static const onTertiary = Color(0xFFFFFFFF);
   static const onTertiaryContainer = Color(0xFFF5FFF6);
 
+  // Neutral Core & Typography Contrast
   static const onSurface = Color(0xFF131B2E);
   static const onSurfaceVariant = Color(0xFF3F4850);
-  static const textPrimary = Color(0xFF0F172A);
-  static const textDim = Color(0xFF475569);
-  static const textMuted = Color(0xFF94A3B8);
+  static const textPrimary = Color(0xFF0F172A); // Deep Slate
+  static const textDim = Color(0xFF475569);     // Muted Slate
+  static const textMuted = Color(0xFF94A3B8);   // Disabled / Placeholder
 
+  // Accents & Functional Colors
   static const accent = Color(0xFF0284C7);
   static const accentDim = Color(0xFF0369A1);
   static const cyan = Color(0xFF0EA5E9);
@@ -49,21 +59,18 @@ class AppColors {
   static const amber = Color(0xFFF59E0B);
   static const red = Color(0xFFEF4444);
 
+  // Error States
   static const error = Color(0xFFBA1A1A);
   static const onError = Color(0xFFFFFFFF);
   static const errorContainer = Color(0xFFFFDAD6);
   static const onErrorContainer = Color(0xFF93000A);
 
+  // Shadow Definitions (Soft ambient light dissipation)
   static const cardShadow = [
     BoxShadow(
-      color: Color(0x080F172A),
-      blurRadius: 3,
-      offset: Offset(0, 1),
-    ),
-    BoxShadow(
-      color: Color(0x050F172A),
+      color: Color(0x060F172A),
       blurRadius: 16,
-      offset: Offset(0, 6),
+      offset: Offset(0, 4),
     ),
   ];
 
@@ -89,6 +96,22 @@ class AppColors {
 
 class AppTypography {
   AppTypography._();
+
+  // Space Grotesk & Syne EV Wide Typography (Headlines, Numbers & Telemetry)
+  static TextStyle evWide({
+    double fontSize = 32,
+    FontWeight fontWeight = FontWeight.w700,
+    Color? color,
+    double? letterSpacing,
+    double? height,
+  }) =>
+      GoogleFonts.syne(
+        fontSize: fontSize,
+        fontWeight: fontWeight,
+        letterSpacing: letterSpacing ?? -0.5,
+        height: height,
+        color: color ?? AppColors.textPrimary,
+      );
 
   static TextStyle displayLg({Color? color}) => GoogleFonts.spaceGrotesk(
         fontSize: 56,
@@ -144,6 +167,7 @@ class AppTypography {
         fontFeatures: const [FontFeature.tabularFigures()],
       );
 
+  // Plus Jakarta Sans (Body & Controls)
   static TextStyle bodyLg({Color? color}) => GoogleFonts.plusJakartaSans(
         fontSize: 18,
         fontWeight: FontWeight.w400,
@@ -233,13 +257,13 @@ class AppTheme {
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        centerTitle: false,
-        iconTheme: const IconThemeData(color: AppColors.textPrimary),
-        titleTextStyle: GoogleFonts.spaceGrotesk(
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: AppColors.textPrimary, size: 20),
+        titleTextStyle: GoogleFonts.syne(
           color: AppColors.textPrimary,
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
         ),
       ),
       cardTheme: CardThemeData(
@@ -247,7 +271,7 @@ class AppTheme {
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           side: const BorderSide(color: AppColors.panelBorder, width: 1),
         ),
       ),
@@ -325,5 +349,6 @@ class AppTheme {
     );
   }
 
+  // Alias cho tương thích code cũ
   static ThemeData dark() => light();
 }

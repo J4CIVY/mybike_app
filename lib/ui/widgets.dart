@@ -25,7 +25,7 @@ class Panel extends StatelessWidget {
     this.padding = const EdgeInsets.all(16),
     this.color,
     this.borderColor,
-    this.borderRadius = 16,
+    this.borderRadius = 20,
     this.hasActiveHalo = false,
     this.onTap,
   });
@@ -630,11 +630,11 @@ class SectionTitle extends StatelessWidget {
           Expanded(
             child: Text(
               text.toUpperCase(),
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 12,
+              style: GoogleFonts.syne(
+                fontSize: 12.5,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 0.06 * 12,
-                color: AppColors.textDim,
+                letterSpacing: 0.5,
+                color: AppColors.textPrimary,
               ),
             ),
           ),

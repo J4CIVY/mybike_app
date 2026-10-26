@@ -1,3 +1,5 @@
+// Connecting — Màn chuyển tiếp kết nối BLE (Kinetic Stitch EV).
+
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -79,7 +81,7 @@ class _ConnectingScreenState extends ConsumerState<ConnectingScreen> {
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  ble.bikeName ?? 'Xe My Bike',
+                  ble.bikeName ?? 'Xe Dat Bike',
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,

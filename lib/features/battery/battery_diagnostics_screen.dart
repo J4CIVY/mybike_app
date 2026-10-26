@@ -61,13 +61,23 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF0F172A)),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        centerTitle: true,
         title: Text(
-          'BÁC SĨ PIN & OBD',
-          style: GoogleFonts.spaceGrotesk(
+          'Battery & BMS',
+          style: GoogleFonts.syne(
             fontWeight: FontWeight.w700,
             fontSize: 18,
-            letterSpacing: 0.5,
-            color: AppColors.textPrimary,
+            color: const Color(0xFF0F172A),
           ),
         ),
         actions: [
@@ -78,7 +88,7 @@ class _BatteryDiagnosticsScreenState extends ConsumerState<BatteryDiagnosticsScr
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primary),
                   )
-                : const Icon(Icons.refresh_rounded),
+                : const Icon(Icons.refresh_rounded, color: Color(0xFF0F172A)),
             tooltip: 'Quét lại dữ liệu xe',
             onPressed: connected && !_isRefreshing ? _refreshData : null,
           ),

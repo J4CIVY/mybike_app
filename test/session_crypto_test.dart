@@ -101,6 +101,16 @@ void main() {
           response: [0x21, 0x43, 0x00]),
       isEmpty,
     );
+
+    // Stale-tail buffer slicing
+    final sliced = BikeSessionCrypto.decryptProtectedRead(
+      sessionKey: _hex(sessionKeyHex),
+      characteristicUuid: testUuid,
+      response: resp,
+      expectedLength: 12,
+    );
+    expect(sliced.length, 12);
+    expect(_hexTo(sliced), _hexTo(Uint8List.fromList(List.generate(12, (i) => i))));
   });
 }
 

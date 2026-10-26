@@ -4,6 +4,8 @@
 // 2. Chế độ âm thanh còi tìm xe: Mẫu nhịp tiêu chuẩn, Nhịp đôi Staccato, Báo động dồn dập SOS.
 // 3. Thông tin xe & Serial khung sườn từ firmware xe (deviceSerialChar).
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +14,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/ble/ble_controller.dart';
 import '../../ui/app_theme.dart';
 import '../../ui/widgets.dart';
+import '../firmware_lab/firmware_lab_screen.dart';
 
 class VehicleSettingsScreen extends ConsumerStatefulWidget {
   const VehicleSettingsScreen({super.key});
@@ -23,6 +26,19 @@ class VehicleSettingsScreen extends ConsumerStatefulWidget {
 class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
   bool _isReadingSerial = false;
   bool _isSyncingTime = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Mở screen khi đang kết nối → đọc giá trị settings THẬT từ xe
+    // (đè cache local trong prefs — giá trị xe là chuẩn).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final ble = ref.read(bleProvider);
+      if (ble.phase == BlePhase.connected) {
+        unawaited(ref.read(bleProvider.notifier).refreshFwSettings());
+      }
+    });
+  }
 
   Future<void> _readSerial() async {
     setState(() => _isReadingSerial = true);
@@ -62,57 +78,55 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF0F172A)),
+          onPressed: () {
+            if (Navigator.of(context).canPop()) {
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        centerTitle: true,
         title: Text(
-          'CÀI ĐẶT XE & HIỆU NĂNG',
-          style: GoogleFonts.spaceGrotesk(
+          'Settings',
+          style: GoogleFonts.syne(
             fontWeight: FontWeight.w700,
             fontSize: 18,
-            letterSpacing: 0.5,
-            color: AppColors.textPrimary,
+            color: const Color(0xFF0F172A),
           ),
         ),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
-          // 1. Thẻ Thông Tin Xe & Serial Khung
+          // 1. Thông Tin Xe & Serial Khung
           _buildVehicleInfoCard(ble, connected, telemetry?.version ?? '1.14.0'),
           const SizedBox(height: 16),
 
-          // 2. Thẻ Đồng Bộ Đồng Hồ Taplo
+          // 2. Đồng Hồ Taplo & Thời Gian Thực
           const SectionTitle('ĐỒNG HỒ TAPLO & THỜI GIAN THỰC'),
           const SizedBox(height: 10),
           _buildTimeSyncCard(ble, connected),
           const SizedBox(height: 16),
 
-          // 3. Cảm Giác Lái & Hiệu Năng Vận Hành
-          const SectionTitle('HIỆU NĂNG & CẢM GIÁC LÁI'),
-          const SizedBox(height: 10),
-          _buildPerformanceCard(ble),
-          const SizedBox(height: 16),
-
-          // 4. Chế Độ Âm Thanh Còi / Buzzer Tìm Xe
-          const SectionTitle('ÂM THANH CÒI TÌM XE & BÁO ĐỘNG'),
-          const SizedBox(height: 10),
-          _buildSoundPatternCard(ble, connected),
-          const SizedBox(height: 16),
-
-          // 5. Giới Hạn Tốc Độ An Toàn (Speed Limiter) — ghi THẬT xuống xe
-          const SectionTitle('GIỚI HẠN TỐC ĐỘ AN TOÀN'),
+          // 3. An toàn & điều khiển — đã verify trên xe thật
+          const SectionTitle('AN TOÀN & ĐIỀU KHIỂN'),
           const SizedBox(height: 10),
           _buildSpeedLimiterCard(ble),
+          const SizedBox(height: 12),
+          _buildLockLightsCard(ble, connected),
           const SizedBox(height: 16),
 
-          // 6. Cài đặt xe thật (firmware MASTER_CONFIG)
-          const SectionTitle('CÀI ĐẶT XE (FIRMWARE)'),
+          // 4. Tiện ích xe — đã verify round-trip
+          const SectionTitle('TIỆN ÍCH XE'),
           const SizedBox(height: 10),
-          _buildFirmwareSettingsCard(ble, connected),
+          _buildUtilityCard(ble, connected),
           const SizedBox(height: 16),
 
-          // 7. Nâng cao — cẩn thận
-          const SectionTitle('NÂNG CAO — CẨN THẬN'),
-          const SizedBox(height: 10),
-          _buildAdvancedCard(ble, connected),
+          // 5. Nâng cao (thử nghiệm) — tính năng chưa có điều kiện hoạt động
+          _buildAdvancedSection(ble, connected),
         ],
       ),
     );
@@ -205,7 +219,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
                         color: AppColors.primary.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Icon(Icons.qr_code_2_rounded, size: 14, color: AppColors.primary),
+                      child: const Icon(Icons.numbers_rounded, size: 14, color: AppColors.primary),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
@@ -404,7 +418,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Gửi số giây chuẩn UTC (chuẩn firmware Dat Bike) vào màn hình Taplo xe qua kết nối BLE bảo mật, khắc phục triệt để lỗi lệch giờ khi xe ngắt bình hoặc đỗ lâu ngày.',
+            'Gửi tổng số giây trong ngày theo giờ địa phương (0–86399) qua kênh Protected Write (0x44E2BDE6) vào đồng hồ RTC của xe, khắc phục lỗi lệch giờ khi xe ngắt bình hoặc đỗ lâu ngày.',
             style: GoogleFonts.plusJakartaSans(fontSize: 11.5, color: AppColors.textDim, height: 1.4),
           ),
         ],
@@ -572,7 +586,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Đặc tả BLE: Còi tìm xe hiện phát tín hiệu thử nghiệm an toàn qua Alert Service (0x5B6D1069). Ứng dụng đã gỡ bỏ hoàn toàn việc can thiệp vào công tắc nguồn (0x350D9A82) để bảo vệ tuyệt đối relay xe.',
+                    'Đặc tả BLE (RE2 verified): Khi xe đang tắt máy, ghi Plain \'1\' vào kênh 0x350D9A82 sẽ phát 1 tiếng còi đánh thức MCU mà không đóng relay nguồn. Kênh 0x87EFAB0D (setBeepUUID) trong fw 1.14.0 chỉ lưu NVS chứ không có hàm phát còi.',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11.5,
                       color: AppColors.textPrimary,
@@ -707,7 +721,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
     );
   }
 
-  // ========== THẺ 4: GIỚI HẠN TỐC ĐỘ AN TOÀN ==========
+  // ========== THẺ 4: GIỚI HẠN TỐC ĐỘ AN TOÀN (60 KM/H) ==========
   Widget _buildSpeedLimiterCard(BleState ble) {
     final connected = ble.phase == BlePhase.connected;
     return Panel(
@@ -731,7 +745,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Giới hạn tốc độ được XE thực thi thật (firmware onWriteSpeedLimit — char 0a19a49a, protected write). Lệnh ghi trực tiếp xuống xe qua Bluetooth, không phụ thuộc app.',
+                    '✅ Đã verify trên xe 24/10: ECE là "cổng" của giới hạn — cần bật ECE thì trần 60 km/h mới có hiệu lực. App luôn ghi đồng bộ cả ECE + SpeedLimit.',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11.5,
                       fontWeight: FontWeight.w600,
@@ -744,7 +758,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
             ),
           ),
           Text(
-            connected ? 'Chọn mức giới hạn (ghi xuống xe ngay):' : 'Kết nối xe để ghi giới hạn tốc độ xuống firmware:',
+            connected ? 'Tùy chọn tốc độ an toàn (ghi xuống xe ngay):' : 'Kết nối xe để ghi giới hạn tốc độ xuống firmware:',
             style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
           ),
           const SizedBox(height: 12),
@@ -755,114 +769,121 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
                 desc: 'Full Power',
                 isSelected: ble.speedLimitMode == 0,
                 onTap: () async {
-                  ref.read(bleProvider.notifier).setSpeedLimitMode(0);
-                  if (connected) {
-                    _showResult(await ref.read(bleProvider.notifier).setFwSpeedLimit(0));
-                  }
+                  if (ble.speedLimitMode == 0) return;
+                  final confirm = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      backgroundColor: AppColors.panel,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      title: Row(
+                        children: [
+                          const Icon(Icons.warning_amber_rounded, color: AppColors.amber, size: 22),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Tắt Giới Hạn Tốc Độ?',
+                              style: GoogleFonts.spaceGrotesk(fontSize: 16, fontWeight: FontWeight.w700),
+                            ),
+                          ),
+                        ],
+                      ),
+                      content: Text(
+                        'Khi muốn tắt giới hạn về Full Power, bạn cần tắt máy xe và bật lại để bộ điều tốc VESC giải phóng bộ nhớ RAM.\n\n'
+                        'App sẽ gửi lệnh tắt giới hạn tốc độ và chế độ ECE ngay bây giờ. Sau khi tắt, xe sẽ cho chuyển mode lái trở lại (khi ECE bật, xe KHÔNG cho chuyển mode — verified 24/10).',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 13, height: 1.45, color: AppColors.textPrimary),
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: Text('HỦY', style: GoogleFonts.spaceGrotesk(color: AppColors.textDim)),
+                        ),
+                        FilledButton(
+                          style: FilledButton.styleFrom(backgroundColor: AppColors.primary),
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: Text('XÁC NHẬN TẮT', style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirm != true) return;
+                  final res = await ref.read(bleProvider.notifier).setSafeSpeedLimit60(false);
+                  _showResult(res);
                 },
               ),
               const SizedBox(width: 8),
               _buildSegmentOption(
-                label: 'Đô thị',
-                desc: '≈50 km/h',
+                label: 'Giới hạn 60 km/h',
+                desc: 'An toàn đô thị',
                 isSelected: ble.speedLimitMode == 1,
                 onTap: () async {
-                  ref.read(bleProvider.notifier).setSpeedLimitMode(1);
-                  if (connected) {
-                    _showResult(await ref.read(bleProvider.notifier).setFwSpeedLimit(1));
-                  }
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(
-                label: 'Tập lái',
-                desc: '≈30 km/h',
-                isSelected: ble.speedLimitMode == 2,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setSpeedLimitMode(2);
-                  if (connected) {
-                    _showResult(await ref.read(bleProvider.notifier).setFwSpeedLimit(2));
-                  }
+                  if (ble.speedLimitMode == 1) return;
+                  final res = await ref.read(bleProvider.notifier).setSafeSpeedLimit60(true);
+                  _showResult(res);
                 },
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: AppColors.amber.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.info_outline_rounded, color: AppColors.amber, size: 16),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '📌 ECE = cổng của giới hạn (verified 24/10): cần bật ECE mới limit được 60 km/h. Khi ECE đang bật, xe KHÔNG cho chuyển mode lái — tắt giới hạn này để chuyển mode. Muốn về Full Power hoàn toàn, tắt giới hạn rồi TẮT/MỞ lại xe (VESC xóa trần trong RAM).',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.amber,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
     );
   }
 
-  /// Cài đặt xe thật từ firmware MASTER_CONFIG service f7e2c8a1.
-  Widget _buildFirmwareSettingsCard(BleState ble, bool connected) {
+  /// Tiện ích xe đã verify round-trip: tự tắt khi đỗ + đặt tên xe.
+  Widget _buildUtilityCard(BleState ble, bool connected) {
     return Panel(
       padding: const EdgeInsets.all(18),
       borderRadius: 20,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Chế độ lái & tiện ích (firmware xử lý trực tiếp):',
-            style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Tiện ích xử lý trực tiếp bởi firmware xe:',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
+                ),
+              ),
+              if (connected)
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  tooltip: 'Đọc giá trị thật từ xe',
+                  icon: const Icon(Icons.sync_rounded, size: 18, color: AppColors.textDim),
+                  onPressed: () async {
+                    await ref.read(bleProvider.notifier).refreshFwSettings();
+                    _showResult('Đã đồng bộ giá trị settings từ xe (xem log fw_settings_synced).');
+                  },
+                ),
+            ],
           ),
           const SizedBox(height: 14),
-
-          // ECE mode
-          Text('CHẾ ĐỘ ECE', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildSegmentOption(label: 'Tắt', desc: 'ECE 0', isSelected: ble.eceMode == 0,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setEceMode(0);
-                  _showResult(await ref.read(bleProvider.notifier).setFwEceMode(0));
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(label: 'Chuẩn', desc: 'ECE 1', isSelected: ble.eceMode == 1,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setEceMode(1);
-                  _showResult(await ref.read(bleProvider.notifier).setFwEceMode(1));
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(label: 'Mạnh', desc: 'ECE 2', isSelected: ble.eceMode == 2,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setEceMode(2);
-                  _showResult(await ref.read(bleProvider.notifier).setFwEceMode(2));
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          // Grab mode
-          Text('CHẾ ĐỘ GRAB (xe dịch vụ)', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildSegmentOption(label: 'Cá nhân', desc: 'Grab 0', isSelected: ble.grabMode == 0,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setGrabMode(0);
-                  _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(0));
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(label: 'Dịch vụ 1', desc: 'Grab 1', isSelected: ble.grabMode == 1,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setGrabMode(1);
-                  _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(1));
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(label: 'Dịch vụ 2', desc: 'Grab 2', isSelected: ble.grabMode == 2,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setGrabMode(2);
-                  _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(2));
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
 
           // Tự tắt khi đỗ
           Row(
@@ -888,85 +909,381 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
               ),
             ],
           ),
-          const Divider(color: AppColors.panelBorder, height: 24),
 
-          // Distance auto on/off
-          Text('TỰ BẬT/TẮT THEO KHOẢNG CÁCH (bởi xe)', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Text('Xe tự BẬT khi điện thoại đến gần, TẮT khi ra xa — firmware xử lý qua tín hiệu BLE (chính xác hơn đo RSSI của app).',
-              style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim)),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _buildSegmentOption(label: 'Tắt', desc: '—', isSelected: ble.distanceMode == 0,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setDistanceMode(0);
-                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(0));
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(label: 'Gần', desc: 'Mức 1', isSelected: ble.distanceMode == 1,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setDistanceMode(1);
-                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(1));
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(label: 'Vừa', desc: 'Mức 2', isSelected: ble.distanceMode == 2,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setDistanceMode(2);
-                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(2));
-                },
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(label: 'Xa hơn', desc: 'Mức 3', isSelected: ble.distanceMode == 3,
-                onTap: () async {
-                  ref.read(bleProvider.notifier).setDistanceMode(3);
-                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(3));
-                },
-              ),
-            ],
-          ),
-          const Divider(color: AppColors.panelBorder, height: 24),
-
-          // Thêm thẻ NFC
+          // Đặt tên xe — ghi THẬT xuống flash qua char 88c30d2c (firmware
+          // setName, Ghidra-verified). Cũng là cách khôi phục tên nếu lỡ
+          // chạy bản "SỬA CÒI" v1.5.1 (bản đó ghi nhầm UUID vào ô tên xe).
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
+            child: OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: BorderSide(color: AppColors.primary.withValues(alpha: 0.5)),
                 padding: const EdgeInsets.symmetric(vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: const Icon(Icons.credit_card_rounded, size: 18),
+              icon: const Icon(Icons.drive_file_rename_outline_rounded, size: 18),
               label: Text(
-                'THÊM THẺ NFC MỚI',
+                'ĐẶT TÊN XE (lưu xuống xe)',
                 style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
               ),
               onPressed: connected ? () async {
-                final ok = await showDialog<bool>(
+                final current = await ref.read(bleProvider.notifier).readFwBikeName();
+                if (!mounted) return;
+                final ctrl = TextEditingController(
+                    text: current ?? ref.read(bleProvider).bikeName ?? '');
+                final name = await showDialog<String>(
                   context: context,
                   builder: (ctx) => AlertDialog(
                     backgroundColor: AppColors.panel,
-                    title: Text('Thêm thẻ NFC mới?', style: GoogleFonts.spaceGrotesk(fontSize: 16)),
-                    content: Text(
-                      'App gửi lệnh đăng ký thẻ xuống xe → bạn quẹt THẺ MỚI vào đầu đọc trên xe trong ~10 giây. Firmware sẽ lưu thẻ vào danh sách mở khóa (card1/card2…).',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 12.5, height: 1.4),
+                    title: Text('Đặt tên xe', style: GoogleFonts.spaceGrotesk(fontSize: 16)),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextField(
+                          controller: ctrl,
+                          maxLength: 20,
+                          autofocus: true,
+                          decoration: const InputDecoration(
+                            hintText: 'Vd: Dat Bike Quantum S1',
+                            counterStyle: TextStyle(color: Colors.white54, fontSize: 11),
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tên được lưu vào flash xe (firmware setName, tối đa 20 ký tự). '
+                          'Đọc lại tự động sau khi ghi để xác nhận.',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11.5, color: AppColors.textDim),
+                        ),
+                      ],
                     ),
                     actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
-                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bắt đầu')),
+                      TextButton(onPressed: () => Navigator.pop(ctx, null), child: const Text('Hủy')),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
+                        child: const Text('Lưu'),
+                      ),
                     ],
                   ),
                 );
-                if (ok == true) {
-                  _showResult(await ref.read(bleProvider.notifier).startAddNfcCard());
+                if (name != null && name.isNotEmpty) {
+                  _showResult(await ref.read(bleProvider.notifier).setFwBikeName(name));
                 }
               } : null,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// Khóa an toàn + Đèn xe — cả hai ĐÃ VERIFY trên xe thật (LAB 23-24/10).
+  /// Khóa theo QUY TRÌNH CHUẨN: app tự TẮT xe trước khi ARM (xem lockBike).
+  Widget _buildLockLightsCard(BleState ble, bool connected) {
+    return Panel(
+      padding: const EdgeInsets.all(18),
+      borderRadius: 20,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Khóa an toàn (ARM qua eec8fd7f — LAB 23/10 xác minh)
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('KHÓA AN TOÀN (CHỐNG TRỘM)', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(
+                      ble.isLocked
+                          ? 'Đang khóa: cần QUẸT THẺ NFC để mở · Còi hú khi đá chống'
+                          : 'Xe phải TẮT mới khóa — app sẽ tự tắt xe. Sau khóa: quẹt thẻ NFC để mở, còi hú báo động khi xe bị động vào',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 11,
+                        color: ble.isLocked ? AppColors.error : AppColors.textDim,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: ble.isLocked,
+                activeThumbColor: AppColors.error,
+                onChanged: connected ? (v) async {
+                  if (v) {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: AppColors.bg,
+                        title: Text('Khóa an toàn xe?', style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700)),
+                        content: Text(
+                          'Quy trình khóa (chuẩn hóa):\n• Nếu xe đang BẬT → app TẮT xe trước\n• Xe KHÓA an toàn — KHÔNG kết nối/mở lại qua app cho đến khi QUẸT THẺ NFC\n• Còi sẽ HÚ khi có người động vào xe (đá chống)\n\nChắc chắn thẻ NFC của bạn đang trong tay?',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 13),
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('HỦY')),
+                          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('KHÓA')),
+                        ],
+                      ),
+                    );
+                    if (ok != true) return;
+                    _showResult(await ref.read(bleProvider.notifier).lockBike());
+                  } else {
+                    _showResult(await ref.read(bleProvider.notifier).unlockBike());
+                  }
+                } : null,
+              ),
+            ],
+          ),
+          const Divider(color: AppColors.panelBorder, height: 24),
+
+          // Cảnh báo an toàn b0ca953d (onWriteVescProgamming @0x4015565c — RE2 verified)
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('CỔNG b0ca953d (VESC PROGRAMMING / DEV MODE)',
+                        style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.amber)),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Đính chính RE2: b0ca953d là công tắc đảo bit (XOR) cờ nạp VESC (cfg+0x62), làm ngắt vescPollTask (IM=0) và tắt đèn như hệ quả phụ. Đã khóa trên màn hình chính để đảm bảo an toàn.',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.lock_outline_rounded, size: 20, color: AppColors.amber),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// NÂNG CAO (THỬ NGHIỆM) — tính năng chưa có điều kiện xác minh hiệu ứng
+  /// hoặc không khả dụng trên dòng xe này. Gom hết vào đây để màn hình chính
+  /// chỉ chứa những gì đã verify hoạt động.
+  Widget _buildAdvancedSection(BleState ble, bool connected) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.bg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.textDim.withValues(alpha: 0.3)),
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: Material(
+          color: Colors.transparent,
+          child: ExpansionTile(
+            tilePadding: const EdgeInsets.symmetric(horizontal: 14),
+            childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+            iconColor: AppColors.textDim,
+            title: Text(
+              'NÂNG CAO (THỬ NGHIỆM) — ẩn các tính năng chưa xác minh',
+              style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textDim),
+            ),
+            subtitle: Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                'Hồ sơ lái local · Chế độ Grab · Tự bật/tắt theo khoảng cách · Profile sạc (dòng Era) · Thẻ NFC · Tắt BMS · Factory reset · LAB',
+                style: GoogleFonts.plusJakartaSans(fontSize: 10.5, color: AppColors.textDim),
+              ),
+            ),
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.amber.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.amber.withValues(alpha: 0.25)),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(Icons.science_outlined, size: 14, color: AppColors.amber),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Các mục dưới đây CHƯA xác minh đầy đủ trên xe của bạn (hoặc chỉ có trên dòng xe khác) — dùng thận trọng và đối chiếu log.',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 10.5, color: AppColors.textDim, height: 1.35),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Hồ sơ lái local (firmware 1.14.0 chưa hỗ trợ ghi RECUP/ga qua BLE)
+              _buildPerformanceCard(ble),
+              const SizedBox(height: 12),
+
+              // Nhịp còi tìm xe (thay đổi tần suất lặp gói hú)
+              _buildSoundPatternCard(ble, connected),
+              const SizedBox(height: 12),
+
+              // Grab mode — round-trip OK nhưng hiệu ứng lái chưa quan sát được
+              Text('CHẾ ĐỘ GRAB (xe dịch vụ / chống giật ga) — chưa xác minh hiệu ứng', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text('Ghi xuống xe OK (đọc lại đúng giá trị) nhưng khác biệt khi lái chưa quan sát được trên xe này.',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildSegmentOption(label: 'Cá nhân', desc: 'Ga nhạy', isSelected: ble.grabMode == 0,
+                    onTap: () async {
+                      ref.read(bleProvider.notifier).setGrabMode(0);
+                      _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(false));
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildSegmentOption(label: 'Dịch vụ / Tải', desc: 'Ga êm mượt', isSelected: ble.grabMode == 1,
+                    onTap: () async {
+                      ref.read(bleProvider.notifier).setGrabMode(1);
+                      _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(true));
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Distance auto on/off — round-trip OK, hiệu ứng cần di chuyển mới thấy
+              Text('TỰ BẬT/TẮT THEO KHOẢNG CÁCH (bởi xe) — chưa xác minh', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text('Xe tự BẬT khi điện thoại đến gần, TẮT khi ra xa (firmware xử lý). Cần di chuyển xa/gần mới thấy hiệu ứng — chưa xác minh trên xe này.',
+                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildSegmentOption(label: 'Tắt', desc: '—', isSelected: ble.distanceMode == 0,
+                    onTap: () async {
+                      ref.read(bleProvider.notifier).setDistanceMode(0);
+                      _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(false));
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildSegmentOption(label: 'Bật', desc: 'Mức 1', isSelected: ble.distanceMode == 1,
+                    onTap: () async {
+                      ref.read(bleProvider.notifier).setDistanceMode(1);
+                      _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(true));
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Chế độ sạc dòng xe Era (8a2b0d10 — RAW byte 0x00 / 0x01 / 0x02)
+              Text(
+                'CHẾ ĐỘ SẠC DÒNG XE ERA (STANDARD / FAST / BOOST)',
+                style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Ghi 1 byte RAW (0x00=Standard, 0x01=Fast, 0x02=Boost) vào cổng 0x8A2B0D10 (NVS charging/defaultProfile). Hoạt động trên dòng Dat Bike Era (trên Quantum S1 chỉ lưu NVS).',
+                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildSegmentOption(
+                    label: 'Standard',
+                    desc: '0x00 · Bền pin',
+                    isSelected: ble.chargingProfile == 0,
+                    onTap: () async {
+                      ref.read(bleProvider.notifier).setChargingProfile(0);
+                      _showResult(await ref.read(bleProvider.notifier).setFwChargingProfile(0));
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildSegmentOption(
+                    label: 'Fast',
+                    desc: '0x01 · Sạc nhanh',
+                    isSelected: ble.chargingProfile == 1,
+                    onTap: () async {
+                      ref.read(bleProvider.notifier).setChargingProfile(1);
+                      _showResult(await ref.read(bleProvider.notifier).setFwChargingProfile(1));
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  _buildSegmentOption(
+                    label: 'Boost',
+                    desc: '0x02 · Siêu tốc',
+                    isSelected: ble.chargingProfile == 2,
+                    onTap: () async {
+                      ref.read(bleProvider.notifier).setChargingProfile(2);
+                      _showResult(await ref.read(bleProvider.notifier).setFwChargingProfile(2));
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // Thêm thẻ NFC
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Icons.credit_card_rounded, size: 18),
+                  label: Text(
+                    'THÊM THẺ NFC MỚI (cần thẻ mới trong tay)',
+                    style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+                  ),
+                  onPressed: connected ? () async {
+                    final ok = await showDialog<bool>(
+                      context: context,
+                      builder: (ctx) => AlertDialog(
+                        backgroundColor: AppColors.panel,
+                        title: Text('Thêm thẻ NFC mới?', style: GoogleFonts.spaceGrotesk(fontSize: 16)),
+                        content: Text(
+                          'App gửi lệnh đăng ký thẻ xuống xe → bạn quẹt THẺ MỚI vào đầu đọc trên xe trong ~10 giây. Firmware sẽ lưu thẻ vào danh sách mở khóa (card1/card2…).',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 12.5, height: 1.4),
+                        ),
+                        actions: [
+                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bắt đầu')),
+                        ],
+                      ),
+                    );
+                    if (ok == true) {
+                      _showResult(await ref.read(bleProvider.notifier).startAddNfcCard());
+                    }
+                  } : null,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Tắt BMS + Factory reset
+              _buildAdvancedCard(ble, connected),
+              const SizedBox(height: 12),
+
+              // Vào Phòng Kiểm Nghiệm Firmware (LAB)
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.5)),
+                  ),
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const FirmwareLabScreen()),
+                  ),
+                  icon: const Icon(Icons.science_rounded, size: 18),
+                  label: Text(
+                    '🧪 PHÒNG KIỂM NGHIỆM FIRMWARE (LAB)',
+                    style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
