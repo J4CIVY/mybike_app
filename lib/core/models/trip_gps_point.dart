@@ -1,4 +1,4 @@
-/// Điểm tọa độ GPS và vận tốc xe máy điện Dat Bike tại từng mốc thời gian của hành trình.
+/// Punto de coordenadas GPS y velocidad de la motocicleta durante el trayecto.
 class TripGpsPoint {
   final double lat;
   final double lng;

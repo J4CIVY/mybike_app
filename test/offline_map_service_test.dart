@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:mybike_app/core/services/offline_map_service.dart';
 
@@ -7,7 +7,7 @@ void main() {
 
   group('OfflineMapService Coordinate and Region Tests', () {
     test('lon2tileX and lat2tileY convert geographic coordinates correctly', () {
-      // Tọa độ Hồ Gươm (Hà Nội): 21.0285, 105.8542 tại Zoom 14
+      // Coordenadas geográficas a nivel de Zoom 14
       final xHanoi = OfflineMapService.lon2tileX(105.8542, 14);
       final yHanoi = OfflineMapService.lat2tileY(21.0285, 14);
 

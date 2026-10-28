@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mybike_app/core/ble/ble_controller.dart';
@@ -13,7 +13,7 @@ class MockBleController extends BleController {
   BleState build() => initialState;
 
   @override
-  Future<String?> readDeviceSerial() async => 'DATBIKE-TEST-SERIAL-12345';
+  Future<String?> readDeviceSerial() async => 'BSKMT-TEST-SERIAL-12345';
 }
 
 void main() {
@@ -26,7 +26,7 @@ void main() {
       const BleState(
         phase: BlePhase.connected,
         bikeName: 'Quantum S',
-        frameSerial: 'DATBIKE-QUANTUM-2024-VN-009823487192',
+        frameSerial: 'BSKMT-QUANTUM-2024-VN-009823487192',
       ),
     );
 
@@ -43,7 +43,7 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Cài đặt xe'), findsOneWidget);
+    expect(find.text('Configuración de la Moto'), findsOneWidget);
   });
 
   testWidgets('VehicleSettingsScreen handles long frame serial without breaking layout', (tester) async {
@@ -51,7 +51,7 @@ void main() {
     tester.view.devicePixelRatio = 2.0;
     addTearDown(() => tester.view.resetPhysicalSize());
 
-    const superLongSerial = 'DB-EXTRA-LONG-VIN-CODE-2024-QUANTUM-VN-99887766554433';
+    const superLongSerial = 'BSKMT-EXTRA-LONG-VIN-CODE-2024-QUANTUM-VN-99887766554433';
     final mockController = MockBleController(
       const BleState(
         phase: BlePhase.connected,
@@ -73,7 +73,7 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.textContaining('DB-EXTRA-LONG-VIN'), findsWidgets);
+    expect(find.textContaining('BSKMT-EXTRA-LONG-VIN'), findsWidgets);
   });
 
   testWidgets('VehicleSettingsScreen renders with textScaleFactor 1.4 without overflow', (tester) async {
@@ -85,7 +85,7 @@ void main() {
       const BleState(
         phase: BlePhase.connected,
         bikeName: 'Weaver++',
-        frameSerial: 'DBW-2023-8888',
+        frameSerial: 'BSKMTW-2023-8888',
       ),
     );
 
@@ -134,7 +134,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
     expect(find.text('FRAME-TELEMETRY-9999'), findsOneWidget);
-    expect(find.text('ĐÃ ĐỒNG BỘ'), findsOneWidget);
+    expect(find.text('SINCRONIZADO'), findsOneWidget);
   });
 
   testWidgets('VehicleSettingsScreen copy and read button interaction works cleanly', (tester) async {
@@ -142,7 +142,7 @@ void main() {
       const BleState(
         phase: BlePhase.connected,
         bikeName: 'Quantum S',
-        frameSerial: 'DBQ-SERIAL-2024-TEST',
+        frameSerial: 'BSKMTQ-SERIAL-2024-TEST',
       ),
     );
 
@@ -160,15 +160,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
 
-    // Tìm và tap vào icon sao chép
     final copyButton = find.byIcon(Icons.copy_rounded);
     expect(copyButton, findsOneWidget);
     await tester.tap(copyButton);
     await tester.pump();
     expect(tester.takeException(), isNull);
 
-    // Tap vào nút đọc lại
-    final refreshBtn = find.text('Đọc lại');
+    final refreshBtn = find.text('Releer');
     expect(refreshBtn, findsOneWidget);
     await tester.tap(refreshBtn);
     await tester.pumpAndSettle();

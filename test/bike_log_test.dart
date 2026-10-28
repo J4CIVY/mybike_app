@@ -1,7 +1,3 @@
-﻿// Test decode protobuf BikeLogMsg/BatteryLogMsg/ChargerLogMsg.
-// 
-// Byte được encode tay theo wire-format proto3 — đối chiếu docs/proto/bike.proto.
-
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -10,7 +6,6 @@ import 'package:mybike_app/core/proto/bike_log.dart';
 
 Uint8List u8(List<int> xs) => Uint8List.fromList(xs);
 
-// tag = (field << 3) | wire; wire: 0=varint 2=len 5=fixed32
 List<int> varint(int v) {
   final out = <int>[];
   while (v > 0x7f) {
@@ -25,16 +20,11 @@ List<int> tag(int field, int wire) => varint((field << 3) | wire);
 
 void main() {
   test('BikeLogMsg: speed/state/kmLeft/charging', () {
-    // field 16 (speed) float 25.5: tag 0xCD 0x01, 4 byte LE
     final speed = <int>[...tag(16, 5), 0x00, 0x00, 0xCC, 0x41]; // 25.5f
-    // field 13 (state) varint 3 = DRIVE
     final state = <int>[...tag(13, 0), 3];
-    // field 21 (kmLeft) float 42.0
     final km = <int>[...tag(21, 5), 0x00, 0x00, 0x28, 0x42];
-    // field 1 (name) string "Xe nha"
     final nameBytes = utf8.encode('Xe nha');
     final name = <int>[...tag(1, 2), ...varint(nameBytes.length), ...nameBytes];
-    // ChargerLogMsg { power(5) = 1500 } lồng vào field 22
     final charger = <int>[...tag(5, 0), ...varint(1500)];
     final charging = <int>[...tag(22, 2), ...varint(charger.length), ...charger];
 
@@ -48,8 +38,7 @@ void main() {
     expect(msg.charging!.power, 1500);
   });
 
-  test('BikeLogMsg: unknown field được bỏ qua', () {
-    // field 99 wire 0 varint 5 — firmware mới thêm field lạ
+  test('BikeLogMsg: campos desconocidos son ignorados', () {
     final unknown = <int>[...tag(99, 0), 5];
     final speed = <int>[...tag(16, 5), 0x00, 0x00, 0xCC, 0x41];
     final msg = decodeBikeLogMsg(u8([...unknown, ...speed]));
@@ -57,14 +46,11 @@ void main() {
   });
 
   test('BatteryLogMsg: cellVols packed + voltage', () {
-    // field 12 (cellVols) packed float [3.85, 3.86]
     final f1 = ByteData(4)..setFloat32(0, 3.85, Endian.little);
     final f2 = ByteData(4)..setFloat32(0, 3.86, Endian.little);
     final body = [...f1.buffer.asUint8List(), ...f2.buffer.asUint8List()];
     final cells = <int>[...tag(12, 2), ...varint(body.length), ...body];
-    // field 1 (voltage) float 58.4 = 0x4269999A
     final volt = <int>[...tag(1, 5), 0x9A, 0x99, 0x69, 0x42];
-    // field 17 (socSoc) float 76.5 = 0x42990000
     final soc = <int>[...tag(17, 5), 0x00, 0x00, 0x99, 0x42];
 
     final m = decodeBatteryLogMsg(u8([...volt, ...cells, ...soc]));
@@ -75,24 +61,22 @@ void main() {
     expect(m.socSoc, closeTo(76.5, 0.01));
   });
 
-  test('decodeBikeLogMsg trên buffer rỗng trả về message rỗng', () {
+  test('decodeBikeLogMsg con buffer vacio retorna mensaje vacio', () {
     final m = decodeBikeLogMsg(u8([]));
     expect(m.state, BikeState.off);
     expect(m.name, '');
     expect(m.charging, isNull);
   });
 
-  test('field với wire-type sai không làm desync phần sau', () {
-    // field 16 (speed) nhưng wire 0 (varint) — sai kiểu; theo sau là field 21
-    // (kmLeft float 42.0) viết đúng chuẩn — phải parse được kmLeft.
-    final wrongWire = <int>[...tag(16, 0), 5]; // varint 5
+  test('campo con tipo de dato incorrecto no desincroniza campos posteriores', () {
+    final wrongWire = <int>[...tag(16, 0), 5];
     final km = <int>[...tag(21, 5), 0x00, 0x00, 0x28, 0x42];
     final m = decodeBikeLogMsg(u8([...wrongWire, ...km]));
-    expect(m.speed, 0.0); // không decode được speed
-    expect(m.kmLeft, closeTo(42.0, 0.001)); // nhưng kmLeft vẫn đúng
+    expect(m.speed, 0.0);
+    expect(m.kmLeft, closeTo(42.0, 0.001));
   });
 
-  test('BatteryLogMsg: decode từ JSON UTF-8 payload (hỗ trợ 23 cell)', () {
+  test('BatteryLogMsg: decodificacion desde JSON UTF-8 (soporte 23 celdas)', () {
     final cell23 = List.generate(23, (i) => 3.70 + (i * 0.005));
     final jsonString = jsonEncode({
       'voltage': 85.1,

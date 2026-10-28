@@ -1,20 +1,3 @@
-// Auth probe — ĐÃ VIẾT LẠI AN TOÀN (2026-10-19) theo btsnoop app gốc.
-//
-// Bản cũ spam 287 protected-write counter=0 + ghi token hàng chục lần trong
-// vài giây → xe ngừng phản hồi và drop link (GATT 133, log 2026-10-14).
-//
-// Bản này theo đúng luồng capture (16:16:47, conn2 của app gốc):
-//   1. (bond nếu auth char bị err 0x05/137)
-//   2. Đọc 16B nonce + status từ AUTHORIZATION_CHAR (5e9a2c71)
-//   3. Ghi 16B auth response — TỐI ĐA 3 lần thử, mỗi lần đọc lại status
-//   4. Status 0x01 → derive session key bằng nonce mới đọc được
-//   5. Protected-write password ASCII counter 0 lên bikeSerial
-//   6. Ghi pairingToken UTF-8 lên sessionUuid (87efab0d)
-//   7. Đọc dashboard làm oracle (plain protobuf hoặc keystream decrypt)
-//
-// ⚠️ computeAuthResponse hiện là placeholder CHƯA VERIFY — probe sẽ dừng
-// an toàn ở bước 3 với status 00 cho tới khi crack xong công thức thật.
-
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -51,7 +34,9 @@ class AuthProbe {
   });
 
   BluetoothCharacteristic? _find(
-      List<BluetoothCharacteristic> chars, String uuid) {
+    List<BluetoothCharacteristic> chars,
+    String uuid,
+  ) {
     for (final c in chars) {
       if (c.uuid.str128.toLowerCase() == uuid.toLowerCase()) return c;
     }
@@ -85,8 +70,6 @@ class AuthProbe {
         s.contains('gatt_auth');
   }
 
-  /// Chạy handshake — tối đa [maxAttempts] lần ghi response, dừng ngay khi
-  /// xe báo status 0x01. Không ghi gì thêm khi chưa được chấp nhận.
   Future<AuthProbeResult> run(List<BluetoothCharacteristic> allChars) async {
     const maxAttempts = 3;
     BleLogger.instance.event('probe_start', {
@@ -99,14 +82,11 @@ class AuthProbe {
     if (authChar == null) {
       return const AuthProbeResult(
         success: false,
-        phase: 'Setup',
-        detail: 'Không tìm thấy AUTHORIZATION_CHAR (5e9a2c71)',
+        phase: 'Configuración',
+        detail: 'No se encontró AUTHORIZATION_CHAR (5e9a2c71)',
       );
     }
 
-    // ===== Đọc nonce 16B từ AUTHORIZATION_CHAR (1 lần duy nhất) =====
-    // MỖI lần read là xe xoay nonce MỚI — đọc thêm lần nào cũng làm philocals
-    // state lệch. Nếu bị err 0x05/137 (chưa bond) → createBond rồi đọc lại.
     Uint8List nonce1;
     try {
       nonce1 = await _read(authChar);
@@ -119,8 +99,8 @@ class AuthProbe {
         } catch (e2) {
           return AuthProbeResult(
             success: false,
-            phase: 'Bond',
-            detail: 'Cần bond/mã hoá link nhưng bond thất bại: $e2',
+            phase: 'Emparejamiento',
+            detail: 'Fallo al establecer vínculo seguro (Bond): $e2',
           );
         }
         nonce1 = await _read(authChar);
@@ -132,9 +112,8 @@ class AuthProbe {
     if (nonce1.length != 16) {
       return AuthProbeResult(
         success: false,
-        phase: 'Phase 1',
-        detail: 'Nonce từ 5e9a2c71 phải 16 byte (15B nonce + status), '
-            'nhận ${nonce1.length} — kiểm tra kết nối/bond',
+        phase: 'Fase 1',
+        detail: 'El nonce debe tener 16 bytes. Se recibieron ${nonce1.length}',
       );
     }
     final nonce15 = Uint8List.fromList(nonce1.sublist(0, 15));
@@ -145,9 +124,6 @@ class AuthProbe {
       'initial_status': nonce1[15],
     });
 
-    // ===== Ghi auth response (≤ maxAttempts lần), kiểm status sau mỗi lần =====
-    // Response chỉ phụ thuộc pairingToken (đã crack + verify trên capture);
-    // password chỉ tham gia vào deriveSessionKey ở Phase 2.
     final variants = buildAuthVariants(
       pairingToken: pairingToken,
       password: password,
@@ -168,8 +144,10 @@ class AuthProbe {
       await Future.delayed(const Duration(milliseconds: 120));
       final post = await _read(authChar);
       final ok = post.length == 16 && post[15] == Gatt.authStatusOk;
-      BleLogger.instance.event('phase1_post_auth',
-          {'hex': bytesToHex(post), 'success': ok});
+      BleLogger.instance.event('phase1_post_auth', {
+        'hex': bytesToHex(post),
+        'success': ok,
+      });
       if (ok) {
         acceptedNonce = post;
         break;
@@ -177,19 +155,14 @@ class AuthProbe {
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-      if (acceptedNonce == null) {
-        return const AuthProbeResult(
-          success: false,
-          phase: 'Phase 1',
-          detail: 'Xe từ chối auth response (status 00) — pairing token không '
-              'khớp firmware xe (token hiện tại crack từ fw 1.14.0).',
-        );
-      }
+    if (acceptedNonce == null) {
+      return const AuthProbeResult(
+        success: false,
+        phase: 'Fase 1',
+        detail: 'La moto rechazó la respuesta de autenticación (status 00).',
+      );
+    }
 
-    // ===== Phase 2+3: thử từng ứng viên password với oracle counter =====
-    // Salt = NONCE CHALLENGE (nonce mà response vừa trả lời — theo decompile).
-    // Oracle duy nhất biết session hợp lệ: 4 byte counter đầu của dashboard
-    // TĂNG giữa 2 lần đọc (xe chỉ tăng counter khi decrypt được session key).
     final saltNonce = nonce15;
     final dash = _find(allChars, Gatt.dashboardCharacteristic);
     final serialChar = _find(allChars, Gatt.bikeSerial);
@@ -209,7 +182,6 @@ class AuthProbe {
         'key8': BleLogger.hex(sessionKey.sublist(0, 8)),
       });
 
-      // Protected-write password (data = chính chuỗi password) counter tăng dần
       if (serialChar != null) {
         final frame = BikeSessionCrypto.buildProtectedWrite(
           sessionKey: sessionKey,
@@ -219,7 +191,6 @@ class AuthProbe {
         );
         await _write(serialChar, frame);
       }
-      // Token lên 87efab0d — chỉ lần đầu cho đủ như capture app gốc
       if (cand == variants.first) {
         final sessionUuidChar = _find(allChars, Gatt.sessionUuid);
         if (sessionUuidChar != null) {
@@ -227,7 +198,6 @@ class AuthProbe {
         }
       }
 
-      // Oracle: đọc dashboard 2 lần, so sánh counter
       if (dash == null) continue;
       final r1 = await _read(dash);
       await Future.delayed(const Duration(milliseconds: 900));
@@ -243,21 +213,18 @@ class AuthProbe {
       if (live) {
         return AuthProbeResult(
           success: true,
-          phase: 'Phase 3',
-          detail: 'SESSION HỢP LỆ với password "${cand.password}" '
-              '(counter $c1 → $c2 tăng)',
+          phase: 'Fase 3',
+          detail: 'Sesión válida establecida ($c1 -> $c2)',
           sessionKey: sessionKey,
         );
       }
       await Future.delayed(const Duration(milliseconds: 300));
     }
 
-    return AuthProbeResult(
+    return const AuthProbeResult(
       success: true,
-      phase: 'Phase 3',
-      detail: 'Auth THÀNH CÔNG (Phase 1) nhưng mọi ứng viên password đều sai — '
-          'counter dashboard giữ nguyên (session chưa hợp lệ). Thử PIN khác: '
-          '6 chữ số cuối số động cơ khắc trên motor.',
+      phase: 'Fase 3',
+      detail: 'Autenticación Fase 1 aceptada. Verifique el código PIN o contraseña de la moto.',
     );
   }
 }

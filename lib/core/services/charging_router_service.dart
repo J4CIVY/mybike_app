@@ -1,10 +1,3 @@
-// Bộ Giám Sát & Phân Tích Thông Số Sạc Xe Điện Dat Bike
-//
-// 1. Nhận diện trạng thái sạc: Dòng điện DƯƠNG đi vào pack (telemetry.phase > +0.5A) hoặc gói tin ChargerLogMsg.
-// 2. Tính toán công suất sạc thực tế: P = V_pack * I_nạp.
-// 3. Bộ đếm thời gian thông minh Smart ETA: Ước lượng thời gian sạc tới mốc an toàn 80% và 100%.
-// 4. Minh bạch thông số: Điện áp lưới Vin RMS & Nhiệt củ sạc chỉ hiển thị khi có dữ liệu từ trạm/bộ sạc thông minh.
-
 import 'dart:math';
 import '../proto/bike_log.dart';
 
@@ -45,15 +38,11 @@ class ChargingStatusReport {
 class ChargingRouterService {
   ChargingRouterService._();
 
-  /// Phân tích dữ liệu sạc chi tiết từ ChargerLogMsg và Telemetry
   static ChargingStatusReport analyzeCharging({
     BikeLogMsg? telemetry,
     int targetLimit = 80,
   }) {
     final charger = telemetry?.charging;
-    // QUY ƯỚC DẤU (verify session 20261022T212957): current@8 ÂM = xe DÙNG pin
-    // (chạy xe tải lớn tới -24.9A, điện áp xả 76.8→76.4V); sạc vào pin là DƯƠNG.
-    // isCharging = có gói ChargerLogMsg HOẶC dòng DƯƠNG > 0.5A.
     final isCharging = charger != null || (telemetry != null && telemetry.phase > 0.5);
 
     final power = charger?.power ??
@@ -61,7 +50,6 @@ class ChargingRouterService {
             ? (telemetry.voltage * telemetry.phase.abs()).round()
             : 0);
 
-    // Không fix cứng 220V hay 36°C — chỉ hiển thị khi nhận được dữ liệu telemetry từ trạm sạc thật
     final double? vin = (charger != null && charger.vinRms > 0) ? charger.vinRms.toDouble() : null;
     final isGridUnstable = vin != null && (vin < 190.0 || vin > 255.0);
     final int? fetTemp = (charger != null && charger.fetTemp > 0) ? charger.fetTemp : null;
@@ -69,19 +57,21 @@ class ChargingRouterService {
 
     final stage = charger?.stage ?? (isCharging ? 2 : 0);
     final stageName = switch (stage) {
-      0 => 'Chưa cắm sạc',
-      1 => 'Khởi động nguồn sạc',
-      2 => isCharging ? 'Đang nạp pin (Dòng nạp ${telemetry?.phase.abs().toStringAsFixed(1) ?? "--"}A)' : 'Sạc nhanh Boost',
-      3 => 'Sạc bảo vệ (Điện áp không đổi CV)',
-      4 => 'Đã sạc đầy 100% (Trickle)',
-      5 => 'Ngắt an toàn / Lỗi sạc',
-      _ => 'Đang sạc',
+      0 => 'No conectado',
+      1 => 'Iniciando cargador',
+      2 => isCharging
+          ? 'Cargando batería (Corriente ${telemetry?.phase.abs().toStringAsFixed(1) ?? "--"}A)'
+          : 'Carga rápida Boost',
+      3 => 'Carga de protección (CV)',
+      4 => 'Carga completa 100% (Mantenimiento)',
+      5 => 'Desconexión segura / Error de carga',
+      _ => 'Cargando',
     };
 
     final profileName = switch (charger?.profile ?? 0) {
-      1 => 'Dat Charge Siêu Tốc (SuperBoost 4kW)',
-      2 => 'Sạc chậm bảo vệ pin (Eco Night)',
-      _ => isCharging ? 'Bộ sạc tiêu chuẩn AC' : 'Chưa sạc',
+      1 => 'Carga Ultra-Rápida (SuperBoost 4kW)',
+      2 => 'Carga nocturna protegida (Eco Night)',
+      _ => isCharging ? 'Cargador estándar AC' : 'Sin carga',
     };
 
     final currentPercent = telemetry?.percent ?? 0;
@@ -89,7 +79,6 @@ class ChargingRouterService {
     final eta80Sec = _estimateEtaSeconds(currentPercent, targetLimit, power);
     final boostSec = charger?.boostLeftSec ?? 0;
 
-    // Ước tính kWh đã nạp
     final energyKwh = (power > 0 && charger != null)
         ? (power * charger.stageSec) / 3600000.0
         : 0.0;
@@ -114,12 +103,9 @@ class ChargingRouterService {
 
   static int _estimateEtaSeconds(int currentPct, int targetPct, int powerWatts) {
     if (currentPct >= targetPct) return 0;
-    // Pack pin Dat Bike Quantum: ~7.2 kWh (7200 Wh), Weaver++: ~5.0 kWh (5000 Wh)
-    // Giả định pack chuẩn 7.0 kWh = 7000 Wh. 1% = 70 Wh.
     final pwr = powerWatts > 200 ? powerWatts : 1200;
     final neededPct = targetPct - currentPct;
     final neededWh = neededPct * 70.0;
-    // Hiệu suất sạc ~92%
     final hours = (neededWh / (pwr * 0.92));
     return (hours * 3600).round();
   }

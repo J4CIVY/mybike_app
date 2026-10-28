@@ -1,9 +1,3 @@
-// OTA firmware — metadata công khai (đã verify thật 2026-10-13).
-// GET https://vms.dat.bike/api/v1/firmware?beta={0,1}&dev={0,1}
-// → { version, releaseNote, firmwares: { bms: {location, revision, hash}, ... } }
-// File .bin/.zip nằm trên S3 công khai, tải trực tiếp.
-// Truyền BLE (FAST_OTA service) là Phase 2 — cần UUID OTA chưa confirm.
-
 import 'dart:convert';
 import 'dart:io';
 
@@ -49,7 +43,7 @@ class OtaService {
       final uri = Uri.parse('$_base/firmware?beta=${beta ? 1 : 0}&dev=${dev ? 1 : 0}');
       final res = await http.get(uri).timeout(const Duration(seconds: 10));
       if (res.statusCode != 200) {
-        throw OtaException('Lỗi tải metadata firmware: HTTP ${res.statusCode}');
+        throw OtaException('Error al descargar metadatos de firmware: HTTP ${res.statusCode}');
       }
       final json = jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
       final firmwares = (json['firmwares'] as Map<String, dynamic>? ?? {});
@@ -71,12 +65,10 @@ class OtaService {
         boards: boards,
       );
     } catch (_) {
-      // Khi lỗi mạng hoặc không có kết nối, trả về null thay vì dữ liệu giả
       return null;
     }
   }
 
-  /// Tải board về file tạm, báo progress 0.0→1.0.
   Future<File> downloadBoard(
     BoardFirmware board, {
     required void Function(double progress) onProgress,
@@ -85,11 +77,9 @@ class OtaService {
     final req = http.Request('GET', uri);
     final res = await http.Client().send(req).timeout(const Duration(seconds: 30));
     if (res.statusCode != 200) {
-      throw OtaException('S3 trả HTTP ${res.statusCode} cho ${board.board}');
+      throw OtaException('El servidor respondió HTTP ${res.statusCode} para ${board.board}');
     }
     final total = res.contentLength ?? 0;
-    // KHÔNG dùng Directory.systemTemp — trên Android là /data/local/tmp,
-    // app không có quyền ghi (crash). Dùng cache dir của app.
     final tmp = await getTemporaryDirectory();
     final file = File('${tmp.path}/datbike-${board.board}-${board.revision ?? "x"}.bin');
     final sink = file.openWrite();
@@ -105,7 +95,7 @@ class OtaService {
     }
     onProgress(1.0);
 
-    // Kiểm tra tính toàn vẹn (Checksum / Hash verification)
+    // Verificación de integridad mediante Checksum / Hash
     if (board.hash != null && board.hash!.trim().isNotEmpty) {
       final expectedHash = board.hash!.trim().toLowerCase();
       final bytes = await file.readAsBytes();
@@ -120,8 +110,8 @@ class OtaService {
           await file.delete();
         } catch (_) {}
         throw OtaException(
-          'Mã băm firmware không khớp (Toàn vẹn tệp hỏng)! '
-          'Kỳ vọng: $expectedHash, Tính toán: $calculatedHash',
+          'El hash del firmware no coincide (archivo corrupto). '
+          'Esperado: $expectedHash, Calculado: $calculatedHash',
         );
       }
     }

@@ -1,221 +1,17 @@
-// Theme "Kinetic Stitch EV" — Thiết kế giao diện xe điện thế hệ mới.
-// Nền sáng tinh khôi (Luminous Canvas #FAF8FF), thẻ trắng nguyên bản (#FFFFFF) viền hairline mảnh (#E2E8F0),
-// tương phản sâu (Deep Slate #0F172A), accent xanh điện (Electric Azure #0284C7 & Cyan #0EA5E9),
-// kết hợp Space Grotesk (chỉ số & telemetry) và Plus Jakarta Sans (nội dung & điều khiển).
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class AppColors {
-  AppColors._();
+import 'theme/app_colors.dart';
+import 'theme/app_typography.dart';
 
-  // Surface System (EV Companion Clean Aesthetic)
-  static const surface = Color(0xFFF8F9FA);
-  static const surfaceDim = Color(0xFFE2E8F0);
-  static const surfaceBright = Color(0xFFF8F9FA);
-  static const surfaceContainerLowest = Color(0xFFFFFFFF);
-  static const surfaceContainerLow = Color(0xFFF8FAFC);
-  static const surfaceContainer = Color(0xFFF1F5F9);
-  static const surfaceContainerHigh = Color(0xFFE2E8F0);
-  static const surfaceContainerHighest = Color(0xFFCBD5E1);
-  static const surfaceVariant = Color(0xFFF1F5F9);
-
-  // Background & Panels
-  static const bg = Color(0xFFF8F9FA);
-  static const panel = Color(0xFFFFFFFF);
-  static const panelSecondary = Color(0xFFF8FAFC);
-  static const panelBorder = Color(0xFFF1F5F9);
-  static const panelBorderBright = Color(0xFFE2E8F0);
-  static const borderSubtle = Color(0xFFF1F5F9);
-
-  // Core Brand Colors
-  static const primary = Color(0xFF2563EB); // Electric Azure Blue
-  static const primaryContainer = Color(0xFF1D4ED8);
-  static const onPrimary = Color(0xFFFFFFFF);
-  static const onPrimaryContainer = Color(0xFFFDFCFF);
-
-  static const secondary = Color(0xFF0EA5E9); // Energy Hue Accent
-  static const secondaryContainer = Color(0xFF39B8FD);
-  static const onSecondary = Color(0xFFFFFFFF);
-  static const onSecondaryContainer = Color(0xFF004666);
-
-  static const tertiary = Color(0xFF10B981); // Eco / Optimal Charging / Battery Health
-  static const tertiaryContainer = Color(0xFF00855B);
-  static const onTertiary = Color(0xFFFFFFFF);
-  static const onTertiaryContainer = Color(0xFFF5FFF6);
-
-  // Neutral Core & Typography Contrast
-  static const onSurface = Color(0xFF131B2E);
-  static const onSurfaceVariant = Color(0xFF3F4850);
-  static const textPrimary = Color(0xFF0F172A); // Deep Slate
-  static const textDim = Color(0xFF475569);     // Muted Slate
-  static const textMuted = Color(0xFF94A3B8);   // Disabled / Placeholder
-
-  // Accents & Functional Colors
-  static const accent = Color(0xFF0284C7);
-  static const accentDim = Color(0xFF0369A1);
-  static const cyan = Color(0xFF0EA5E9);
-  static const mint = Color(0xFF10B981);
-  static const amber = Color(0xFFF59E0B);
-  static const red = Color(0xFFEF4444);
-
-  // Error States
-  static const error = Color(0xFFBA1A1A);
-  static const onError = Color(0xFFFFFFFF);
-  static const errorContainer = Color(0xFFFFDAD6);
-  static const onErrorContainer = Color(0xFF93000A);
-
-  // Shadow Definitions (Soft ambient light dissipation)
-  static const cardShadow = [
-    BoxShadow(
-      color: Color(0x060F172A),
-      blurRadius: 16,
-      offset: Offset(0, 4),
-    ),
-  ];
-
-  static const modalShadow = [
-    BoxShadow(
-      color: Color(0x0F0F172A),
-      blurRadius: 32,
-      offset: Offset(0, 12),
-    ),
-    BoxShadow(
-      color: Color(0x080F172A),
-      blurRadius: 6,
-      offset: Offset(0, 2),
-    ),
-  ];
-
-  static const activeHalo = BoxShadow(
-    color: Color(0x2E0EA5E9),
-    spreadRadius: 3,
-    blurRadius: 0,
-  );
-}
-
-class AppTypography {
-  AppTypography._();
-
-  // Space Grotesk & Syne EV Wide Typography (Headlines, Numbers & Telemetry)
-  static TextStyle evWide({
-    double fontSize = 32,
-    FontWeight fontWeight = FontWeight.w700,
-    Color? color,
-    double? letterSpacing,
-    double? height,
-  }) =>
-      GoogleFonts.plusJakartaSans(
-        fontSize: fontSize,
-        fontWeight: fontWeight,
-        letterSpacing: letterSpacing ?? -0.5,
-        height: height,
-        color: color ?? AppColors.textPrimary,
-      );
-
-  static TextStyle displayLg({Color? color}) => GoogleFonts.spaceGrotesk(
-        fontSize: 56,
-        fontWeight: FontWeight.w600,
-        height: 64 / 56,
-        letterSpacing: -0.03 * 56,
-        color: color ?? AppColors.textPrimary,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-
-  static TextStyle displayLgMobile({Color? color}) => GoogleFonts.spaceGrotesk(
-        fontSize: 40,
-        fontWeight: FontWeight.w600,
-        height: 48 / 40,
-        letterSpacing: -0.02 * 40,
-        color: color ?? AppColors.textPrimary,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-
-  static TextStyle headlineXl({Color? color}) => GoogleFonts.spaceGrotesk(
-        fontSize: 36,
-        fontWeight: FontWeight.w600,
-        height: 44 / 36,
-        letterSpacing: -0.02 * 36,
-        color: color ?? AppColors.textPrimary,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-
-  static TextStyle headlineXlMobile({Color? color}) => GoogleFonts.spaceGrotesk(
-        fontSize: 28,
-        fontWeight: FontWeight.w600,
-        height: 36 / 28,
-        letterSpacing: -0.01 * 28,
-        color: color ?? AppColors.textPrimary,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-
-  static TextStyle headlineMd({Color? color}) => GoogleFonts.spaceGrotesk(
-        fontSize: 24,
-        fontWeight: FontWeight.w500,
-        height: 32 / 24,
-        letterSpacing: -0.01 * 24,
-        color: color ?? AppColors.textPrimary,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-
-  static TextStyle headlineSm({Color? color}) => GoogleFonts.spaceGrotesk(
-        fontSize: 20,
-        fontWeight: FontWeight.w500,
-        height: 28 / 20,
-        letterSpacing: 0,
-        color: color ?? AppColors.textPrimary,
-        fontFeatures: const [FontFeature.tabularFigures()],
-      );
-
-  // Plus Jakarta Sans (Body & Controls)
-  static TextStyle bodyLg({Color? color}) => GoogleFonts.plusJakartaSans(
-        fontSize: 18,
-        fontWeight: FontWeight.w400,
-        height: 28 / 18,
-        color: color ?? AppColors.textPrimary,
-      );
-
-  static TextStyle bodyMd({Color? color}) => GoogleFonts.plusJakartaSans(
-        fontSize: 15,
-        fontWeight: FontWeight.w400,
-        height: 22 / 15,
-        color: color ?? AppColors.textPrimary,
-      );
-
-  static TextStyle bodySm({Color? color}) => GoogleFonts.plusJakartaSans(
-        fontSize: 13,
-        fontWeight: FontWeight.w400,
-        height: 18 / 13,
-        color: color ?? AppColors.textDim,
-      );
-
-  static TextStyle labelLg({Color? color, FontWeight? fontWeight}) => GoogleFonts.plusJakartaSans(
-        fontSize: 14,
-        fontWeight: fontWeight ?? FontWeight.w600,
-        height: 20 / 14,
-        letterSpacing: 0.01 * 14,
-        color: color ?? AppColors.textPrimary,
-      );
-
-  static TextStyle labelMd({Color? color, FontWeight? fontWeight}) => GoogleFonts.plusJakartaSans(
-        fontSize: 12,
-        fontWeight: fontWeight ?? FontWeight.w600,
-        height: 16 / 12,
-        letterSpacing: 0.04 * 12,
-        color: color ?? AppColors.textDim,
-      );
-
-  static TextStyle labelSm({Color? color, FontWeight? fontWeight}) => GoogleFonts.plusJakartaSans(
-        fontSize: 11,
-        fontWeight: fontWeight ?? FontWeight.w500,
-        height: 14 / 11,
-        letterSpacing: 0.06 * 11,
-        color: color ?? AppColors.textDim,
-      );
-}
+export 'theme/app_colors.dart';
+export 'theme/app_typography.dart';
 
 class AppTheme {
   AppTheme._();
+
+  static ThemeData get lightTheme => light();
+  static ThemeData get darkTheme => dark();
 
   static ThemeData light() {
     final baseText = GoogleFonts.plusJakartaSansTextTheme();
@@ -233,7 +29,7 @@ class AppTheme {
       onTertiary: AppColors.onTertiary,
       surface: AppColors.panel,
       onSurface: AppColors.textPrimary,
-      error: AppColors.red,
+      error: AppColors.error,
       onError: AppColors.onError,
     );
 
@@ -349,6 +145,51 @@ class AppTheme {
     );
   }
 
-  // Alias cho tương thích code cũ
-  static ThemeData dark() => light();
+  static ThemeData dark() {
+    final baseText = GoogleFonts.plusJakartaSansTextTheme(ThemeData.dark().textTheme);
+
+    final scheme = const ColorScheme.dark(
+      primary: AppColors.primary,
+      onPrimary: AppColors.onPrimary,
+      primaryContainer: AppColors.primaryContainer,
+      onPrimaryContainer: AppColors.onPrimaryContainer,
+      secondary: AppColors.secondary,
+      onSecondary: AppColors.onSecondary,
+      surface: Color(0xFF1E293B),
+      onSurface: Color(0xFFF1F5F9),
+      error: AppColors.error,
+      onError: AppColors.onError,
+    );
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: AppColors.darkBg,
+      textTheme: baseText.copyWith(
+        displayLarge: AppTypography.displayLgMobile(color: Colors.white),
+        headlineLarge: AppTypography.headlineXlMobile(color: Colors.white),
+        headlineMedium: AppTypography.headlineMd(color: Colors.white),
+        headlineSmall: AppTypography.headlineSm(color: Colors.white),
+        bodyLarge: AppTypography.bodyLg(color: const Color(0xFFF1F5F9)),
+        bodyMedium: AppTypography.bodyMd(color: const Color(0xFFCBD5E1)),
+        bodySmall: AppTypography.bodySm(color: const Color(0xFF94A3B8)),
+        labelLarge: AppTypography.labelLg(color: Colors.white),
+        labelMedium: AppTypography.labelMd(color: const Color(0xFFCBD5E1)),
+        labelSmall: AppTypography.labelSm(color: const Color(0xFF94A3B8)),
+      ),
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white, size: 20),
+        titleTextStyle: GoogleFonts.plusJakartaSans(
+          color: Colors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.3,
+        ),
+      ),
+    );
+  }
 }

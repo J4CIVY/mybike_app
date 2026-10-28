@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "vn.mybike.mybike_app"
+    namespace = "com.bskmt.app"
     compileSdk = 37
     ndkVersion = flutter.ndkVersion
 
@@ -16,7 +16,7 @@ android {
 
     defaultConfig {
 
-        applicationId = "vn.mybike.mybike_app"
+        applicationId = "com.bskmt.app"
 
         minSdk = 26
         targetSdk = flutter.targetSdkVersion

@@ -1,9 +1,3 @@
-// WEB PREVIEW — chạy giao diện app trên trình duyệt với dữ liệu GIẢ LẬP
-// (không BLE). Dùng để xem/thiết kế UI nhanh:
-//   flutter run -d web-server --web-port 8099 -t lib/main_web_preview.dart
-// Mở: http://localhost:8099
-// Nút điều khiển sẽ báo lỗi BLE (web không có bluetooth) — đây chỉ là preview UI.
-
 import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -13,16 +7,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/ble/ble_controller.dart';
 import 'core/proto/bike_log.dart';
-import 'features/scan/scan_screen.dart';
-import 'features/scan/connecting_screen.dart';
-import 'features/dashboard/dashboard_screen.dart';
 import 'features/battery/battery_diagnostics_screen.dart';
 import 'features/charging/charging_screen.dart';
-import 'features/settings/vehicle_settings_screen.dart';
+import 'features/dashboard/dashboard_screen.dart';
 import 'features/home/home_shell.dart';
+import 'features/scan/connecting_screen.dart';
+import 'features/scan/scan_screen.dart';
+import 'features/settings/vehicle_settings_screen.dart';
 import 'ui/app_theme.dart';
 
-/// Controller giả lập: xe "Quantum S1" đang bật, số liệu dao động sinh động.
+/// Controlador simulado para depuración web sin hardware BLE
 class PreviewBleController extends BleController {
   Timer? _t;
   int _tick = 0;
@@ -38,7 +32,7 @@ class PreviewBleController extends BleController {
 
   BleState _base() => BleState(
         phase: BlePhase.connected,
-        bikeName: 'Dat Bike Quantum S1',
+        bikeName: 'BSKMT Quantum S1',
         isAuthorized: true,
         sessionKey: Uint8List(16),
         frameSerial: 'RL9C4NGSSSCC00187',
@@ -95,7 +89,7 @@ class PreviewBleController extends BleController {
     final wave = math.sin(t / 6.0);
     final riding = wave > -0.25;
     return BikeLogMsg()
-      ..name = 'Dat Bike Quantum S1'
+      ..name = 'BSKMT Quantum S1'
       ..model = 'QT_S1'
       ..frame = 'RL9C4NGSSSCC00187'
       ..odo = 31238.2 + t * 0.004
@@ -118,22 +112,22 @@ void main() {
       overrides: [
         bleProvider.overrideWith(PreviewBleController.new),
       ],
-      child: const DatBikePreviewApp(),
+      child: const BskmtPreviewApp(),
     ),
   );
 }
 
-class DatBikePreviewApp extends StatelessWidget {
-  const DatBikePreviewApp({super.key});
+class BskmtPreviewApp extends StatelessWidget {
+  const BskmtPreviewApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Dat Bike — Web Preview',
+      title: 'BSKMT — Web Preview',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      darkTheme: AppTheme.light(),
-      themeMode: ThemeMode.light,
+      theme: AppTheme.lightTheme,
+      darkTheme: AppTheme.darkTheme,
+      themeMode: ThemeMode.dark,
       initialRoute: '/',
       routes: {
         '/': (_) => const HomeShell(),

@@ -1,4 +1,4 @@
-// Connecting — Màn chuyển tiếp kết nối BLE (Kinetic Stitch EV).
+// Connecting — Pantalla de transición de conexión BLE BSKMT.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
@@ -34,14 +34,14 @@ class _ConnectingScreenState extends ConsumerState<ConnectingScreen> {
       if (mounted) Navigator.of(context).pushReplacementNamed('/scan');
       return;
     }
-    setState(() => _detail = 'Đang mở phiên GATT & xác thực…');
+    setState(() => _detail = 'Iniciando sesión GATT & autenticación segura…');
     try {
       await ref.read(bleProvider.notifier).connect(device, name: name);
       if (!mounted) return;
       Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _detail = 'Lỗi kết nối: $e');
+      setState(() => _detail = 'Error de conexión: $e');
       await Future.delayed(const Duration(seconds: 2));
       if (!mounted) return;
       Navigator.of(context).pushReplacementNamed('/scan');
@@ -81,7 +81,7 @@ class _ConnectingScreenState extends ConsumerState<ConnectingScreen> {
                 ),
                 const SizedBox(height: 28),
                 Text(
-                  ble.bikeName ?? 'Xe Dat Bike',
+                  ble.bikeName ?? 'Moto BSKMT',
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: 22,
                     fontWeight: FontWeight.w700,
@@ -90,7 +90,7 @@ class _ConnectingScreenState extends ConsumerState<ConnectingScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _detail.isEmpty ? 'Đang khởi tạo kết nối Bluetooth bảo mật…' : _detail,
+                  _detail.isEmpty ? 'Estableciendo enlace Bluetooth seguro…' : _detail,
                   textAlign: TextAlign.center,
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 13.5,
@@ -109,7 +109,7 @@ class _ConnectingScreenState extends ConsumerState<ConnectingScreen> {
                           const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.primary),
                           const SizedBox(width: 8),
                           Text(
-                            'LƯU Ý KHI KẾT NỐI',
+                            'RECOMENDACIONES DE CONEXIÓN',
                             style: GoogleFonts.plusJakartaSans(
                               fontWeight: FontWeight.w700,
                               fontSize: 12,
@@ -121,9 +121,9 @@ class _ConnectingScreenState extends ConsumerState<ConnectingScreen> {
                       ),
                       const SizedBox(height: 10),
                       Text(
-                        '• Đưa điện thoại lại gần xe trong bán kính 2 mét\n'
-                        '• Bật chìa khóa hoặc bấm nút mở xe\n'
-                        '• Kiểm tra không có thiết bị khác đang chiếm kết nối',
+                        '• Mantenga el teléfono cerca de la moto (menos de 2 metros)\n'
+                        '• Encienda el interruptor de energía de la moto\n'
+                        '• Asegúrese de que otro dispositivo no esté conectado',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
                           color: AppColors.textDim,

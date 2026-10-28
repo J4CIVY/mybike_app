@@ -1,11 +1,12 @@
-// Shell chính — 3 Tabs Chuẩn Ngôn Ngữ Thiết Kế Xe Máy Điện Dat Bike:
-// [ Xe ] · [ Năng Lượng ] · [ Chủ Xe ]
+// Shell Principal BSKMT — 3 Módulos de Navegación del Piloto:
+// [ Mi Moto ] · [ Batería / Energía ] · [ Perfil Biker ]
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../charging/charging_screen.dart';
 import '../profile/profile_screen.dart';
+import '../../ui/app_theme.dart';
 import '../../ui/geely_icons.dart';
 import 'my_bike_screen.dart';
 
@@ -22,7 +23,7 @@ class _HomeShellState extends State<HomeShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: AppColors.bg,
       body: IndexedStack(
         index: _tab.clamp(0, 2),
         children: const [
@@ -44,30 +45,30 @@ class _HomeShellState extends State<HomeShell> {
           onDestinationSelected: (i) => setState(() => _tab = i),
           height: 64,
           backgroundColor: Colors.transparent,
-          indicatorColor: const Color(0xFFEFF6FF),
+          indicatorColor: AppColors.primary.withValues(alpha: 0.12),
           indicatorShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           labelTextStyle: WidgetStateProperty.resolveWith(
             (s) => GoogleFonts.plusJakartaSans(
               fontSize: 11,
               fontWeight: s.contains(WidgetState.selected) ? FontWeight.w700 : FontWeight.w500,
-              color: s.contains(WidgetState.selected) ? const Color(0xFF2563EB) : const Color(0xFF64748B),
+              color: s.contains(WidgetState.selected) ? AppColors.primary : const Color(0xFF64748B),
             ),
           ),
           destinations: [
             NavigationDestination(
               icon: GeelyIcons.bike(size: 22, color: const Color(0xFF64748B)),
-              selectedIcon: GeelyIcons.bike(size: 22, color: const Color(0xFF2563EB)),
-              label: 'Xe',
+              selectedIcon: GeelyIcons.bike(size: 22, color: AppColors.primary),
+              label: 'Mi Moto',
             ),
             NavigationDestination(
               icon: GeelyIcons.charging(size: 22, color: const Color(0xFF64748B)),
-              selectedIcon: GeelyIcons.charging(size: 22, color: const Color(0xFF2563EB)),
-              label: 'Năng Lượng',
+              selectedIcon: GeelyIcons.charging(size: 22, color: AppColors.primary),
+              label: 'Energía',
             ),
             NavigationDestination(
               icon: GeelyIcons.profile(size: 22, color: const Color(0xFF64748B)),
-              selectedIcon: GeelyIcons.profile(size: 22, color: const Color(0xFF2563EB)),
-              label: 'Chủ Xe',
+              selectedIcon: GeelyIcons.profile(size: 22, color: AppColors.primary),
+              label: 'Perfil Biker',
             ),
           ],
         ),

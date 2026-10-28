@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mybike_app/core/proto/bike_log.dart';
 import 'package:mybike_app/core/services/battery_diagnostics_service.dart';
 import 'package:mybike_app/core/services/charging_router_service.dart';
@@ -11,13 +11,12 @@ void main() {
         battery: null,
       );
 
-      // Tuyệt đối không sinh mảng cell giả mạo
       expect(report.cellVoltages, isEmpty);
       expect(report.cellCount, 0);
       expect(report.isSimulated, isTrue);
       expect(report.balanceGrade, CellBalanceGrade.unknown);
       expect(report.deltaVoltageMv, 0.0);
-      expect(report.packConfigName, 'Đang chờ BMS...');
+      expect(report.packConfigName, 'Esperando BMS...');
     });
 
     test('Offline without telemetry or battery reports hasLiveTelemetry false and OBD waiting', () {
@@ -33,7 +32,7 @@ void main() {
       expect(report.bmsThermal.temperature, 0.0);
       expect(report.internalResistanceMo, 0.0);
       expect(report.obdItems.length, 8);
-      expect(report.obdItems.every((item) => item.severity == 'Chờ kết nối'), isTrue);
+      expect(report.obdItems.every((item) => item.severity == 'Esperando'), isTrue);
     });
 
     test('Real BMS telemetry with 23 cells returns exact cell count and real balance', () {
@@ -48,7 +47,7 @@ void main() {
       expect(report.cellVoltages.length, 23);
       expect(report.cellCount, 23);
       expect(report.isSimulated, isFalse);
-      expect(report.packConfigName, '23S (23 Cell)');
+      expect(report.packConfigName, '23S (23 Celdas)');
       expect(report.maxCellVoltage, closeTo(3.672, 0.001));
       expect(report.minCellVoltage, closeTo(3.650, 0.001));
       expect(report.balanceGrade, CellBalanceGrade.good);
@@ -57,16 +56,15 @@ void main() {
     test('VESC mc_fault_code 3 (DRV) is decoded precisely without bitmask corruption', () {
       final telemetry = BikeLogMsg()
         ..voltage = 84.0
-        ..error = 3; // VESC DRV Fault
+        ..error = 3;
 
       final report = BatteryDiagnosticsService.analyze(telemetry: telemetry);
 
       expect(report.rawErrorCode, 3);
       final drvItem = report.obdItems.firstWhere((item) => item.code == 'VESC-FAULT-03');
       expect(drvItem.isHealthy, isFalse);
-      expect(drvItem.severity, 'Khẩn cấp');
+      expect(drvItem.severity, 'Urgente');
 
-      // Các lỗi khác không bị ảnh hưởng sai lệch do bitmask
       final overCurrent = report.obdItems.firstWhere((item) => item.code == 'VESC-FAULT-04');
       expect(overCurrent.isHealthy, isTrue);
     });
@@ -74,17 +72,14 @@ void main() {
 
   group('ChargingRouterService Tests', () {
     test('Charging detected from positive phase current without mock 220V/36C', () {
-      // Quy ước dấu verify session 20261022T212957: DƯƠNG = dòng sạc vào pin,
-      // ÂM = xe xả pin (chạy xe -8..-25A kèm điện áp xả 76.8→76.4V).
       final telemetry = BikeLogMsg()
         ..voltage = 84.0
-        ..phase = 15.0; // Dòng nạp 15A
+        ..phase = 15.0;
 
       final report = ChargingRouterService.analyzeCharging(telemetry: telemetry);
 
       expect(report.isCharging, isTrue);
       expect(report.powerWatts, 84 * 15);
-      // Không được trả về 220V hay 36°C mock khi không có bản tin bộ sạc
       expect(report.gridVoltageRms, isNull);
       expect(report.fetTemp, isNull);
       expect(report.isGridUnstable, isFalse);
@@ -94,7 +89,7 @@ void main() {
     test('Not charging when phase is non-positive and charger is null', () {
       final telemetry = BikeLogMsg()
         ..voltage = 76.4
-        ..phase = -10.0; // Xe đang xả dòng kéo tải
+        ..phase = -10.0;
 
       final report = ChargingRouterService.analyzeCharging(telemetry: telemetry);
 

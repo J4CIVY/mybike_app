@@ -3,15 +3,14 @@ import 'package:flutter_map/flutter_map.dart';
 import 'offline_map_service.dart';
 
 enum MapTileStyle {
-  fastCdn,     // OSM-FR: Máy chủ OpenStreetMap hiệu năng cao, đa luồng subdomain a/b/c, hoàn toàn miễn phí & KHÔNG CẦN API KEY
-  darkEv,      // Dark EV: Lớp bản đồ đêm công nghệ bằng bộ lọc đảo màu HUD (No API Key)
-  cyclosm,     // CyclOSM: Bản đồ chuyên biệt cho xe 2 bánh / xe điện Dat Bike (No API Key)
-  osmStandard, // OpenStreetMap tiêu chuẩn (No API Key)
+  fastCdn,
+  darkEv,
+  cyclosm,
+  osmStandard,
 }
 
 class MapTileService {
-  /// Matrix đảo màu và xoay hệ màu để biến bản đồ OSM tiêu chuẩn thành bản đồ đêm Dark EV
-  /// Tương thích 100% mọi thiết bị, không cần API Key, không phụ thuộc server bên thứ ba
+  /// Matriz de inversión y rotación de color para transformar mapa OSM en modo nocturno
   static const List<double> darkMatrix = <double>[
     -0.574, -1.430, -0.144, 0, 255,
     -0.426, -0.570, -0.144, 0, 255,
@@ -22,8 +21,6 @@ class MapTileService {
   static TileLayer buildTileLayer({
     MapTileStyle style = MapTileStyle.fastCdn,
   }) {
-    // Tự động kiểm tra bộ nhớ đệm ổ cứng local offline trước (0ms latency, chạy offline hoàn toàn)
-    // Nếu chưa có thì tải từ mạng và tự động lưu vào ổ cứng
     final offlineProvider = OfflineCacheTileProvider();
 
     switch (style) {
@@ -31,7 +28,7 @@ class MapTileService {
         return TileLayer(
           urlTemplate: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
           subdomains: const ['a', 'b', 'c'],
-          userAgentPackageName: 'com.datbike.app',
+          userAgentPackageName: 'com.bskmt.app',
           maxZoom: 20,
           tileProvider: offlineProvider,
         );
@@ -40,7 +37,7 @@ class MapTileService {
         return TileLayer(
           urlTemplate: 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
           subdomains: const ['a', 'b', 'c'],
-          userAgentPackageName: 'com.datbike.app',
+          userAgentPackageName: 'com.bskmt.app',
           maxZoom: 20,
           tileProvider: offlineProvider,
           tileBuilder: (context, tileWidget, tile) {
@@ -55,7 +52,7 @@ class MapTileService {
         return TileLayer(
           urlTemplate: 'https://{s}.tile-cyclosm.openstreetmap.fr/cyclosm/{z}/{x}/{y}.png',
           subdomains: const ['a', 'b', 'c'],
-          userAgentPackageName: 'com.datbike.app',
+          userAgentPackageName: 'com.bskmt.app',
           maxZoom: 20,
           tileProvider: offlineProvider,
         );
@@ -63,7 +60,7 @@ class MapTileService {
       case MapTileStyle.osmStandard:
         return TileLayer(
           urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.datbike.app',
+          userAgentPackageName: 'com.bskmt.app',
           maxZoom: 19,
           tileProvider: offlineProvider,
         );
@@ -73,13 +70,13 @@ class MapTileService {
   static String getStyleName(MapTileStyle style) {
     switch (style) {
       case MapTileStyle.fastCdn:
-        return 'Tải Nhanh (OSM-FR)';
+        return 'Carga Rápida (OSM-FR)';
       case MapTileStyle.darkEv:
-        return 'Bản Đồ Đêm EV';
+        return 'Modo Nocturno EV';
       case MapTileStyle.cyclosm:
-        return 'Làn Xe Máy / 2 Bánh';
+        return 'Carril Motos / 2 Ruedas';
       case MapTileStyle.osmStandard:
-        return 'OSM Tiêu Chuẩn';
+        return 'OpenStreetMap Estándar';
     }
   }
 

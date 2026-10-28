@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mybike_app/ui/gauge.dart';
@@ -34,7 +34,7 @@ void main() {
               width: 95,
               child: MetricTile(
                 icon: Icons.battery_charging_full_rounded,
-                label: 'PIN (100%)',
+                label: 'BATERÍA (100%)',
                 value: '12580',
                 unit: 'km',
               ),
@@ -60,8 +60,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('CHUYẾN ĐI (TRIP A)'), findsOneWidget);
-    expect(find.text('SỨC KHỎE & MÃ LỖI'), findsOneWidget);
+    expect(find.text('ESTADÍSTICAS DEL VIAJE'), findsOneWidget);
+    expect(find.text('DIAGNÓSTICO OBD & CÓDIGOS DE ERROR'), findsOneWidget);
   });
 
   testWidgets('DashboardScreen renders without overflow on large text scale (1.3x)', (tester) async {

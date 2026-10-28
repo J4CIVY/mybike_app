@@ -1,4 +1,4 @@
-﻿import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mybike_app/core/models/trip_gps_point.dart';
 import 'package:mybike_app/core/ble/ble_controller.dart' show TripRecord;
 import 'package:mybike_app/core/services/trip_gps_tracker.dart';
@@ -96,11 +96,10 @@ void main() {
       expect(sampleRoute.first.lat, closeTo(10.7719, 0.001));
       expect(sampleRoute.first.lng, closeTo(106.7195, 0.001));
 
-      // Điểm đầu và cuối có vận tốc 0 km/h
+      // Puntos inicial y final con velocidad cero
       expect(sampleRoute.first.speedKmh, 0.0);
       expect(sampleRoute.last.speedKmh, 0.0);
 
-      // Điểm giữa có vận tốc biến thiên hợp lý
       final maxFound = sampleRoute.map((e) => e.speedKmh).reduce((a, b) => a > b ? a : b);
       expect(maxFound, greaterThan(20.0));
     });
@@ -109,25 +108,20 @@ void main() {
       final t0 = DateTime(2026, 10, 27, 8, 0, 0);
       final rawPoints = [
         TripGpsPoint(lat: 10.7719, lng: 106.7195, speedKmh: 30.0, timestamp: t0),
-        // Điểm nhảy teleportation phi lý (nhảy 500m trong 1 giây ~ 1800 km/h)
         TripGpsPoint(lat: 10.7760, lng: 106.7240, speedKmh: 30.0, timestamp: t0.add(const Duration(seconds: 1))),
-        // Điểm hợp lý tiếp theo
         TripGpsPoint(lat: 10.7720, lng: 106.7196, speedKmh: 32.0, timestamp: t0.add(const Duration(seconds: 2))),
         TripGpsPoint(lat: 10.7721, lng: 106.7197, speedKmh: 33.0, timestamp: t0.add(const Duration(seconds: 3))),
       ];
 
       final cleaned = TripGpsTracker.cleanAndSmoothRoute(rawPoints);
       expect(cleaned.length, 3);
-      // Điểm nhảy 10.7760 bị loại bỏ
       expect(cleaned.any((p) => p.lat > 10.775), isFalse);
     });
 
     test('TripGpsTracker calculateBearing correctly calculates direction', () {
-      // Đi thẳng về hướng Bắc
       final northBearing = TripGpsTracker.calculateBearing(10.770, 106.710, 10.780, 106.710);
       expect(northBearing, closeTo(0.0, 1.0));
 
-      // Đi thẳng về hướng Đông
       final eastBearing = TripGpsTracker.calculateBearing(10.770, 106.710, 10.770, 106.720);
       expect(eastBearing, closeTo(90.0, 1.0));
     });
@@ -147,16 +141,15 @@ void main() {
       expect(kalman.lat, 10.771900);
       expect(kalman.lng, 106.719500);
 
-      // Nhiễu đột ngột lệch sang một bên
+      // Variación repentina de ruido
       kalman.filter(
         measuredLat: 10.771980,
         measuredLng: 106.719580,
-        accuracyMeters: 20.0, // Sai số đo lớn
+        accuracyMeters: 20.0,
         speedMps: 10.0,
         timestamp: t.add(const Duration(seconds: 1)),
       );
 
-      // Bộ lọc Kalman giữ vị trí không bị giật hoàn toàn sang 10.771980
       expect(kalman.lat!, lessThan(10.771980));
       expect(kalman.lat!, greaterThan(10.771900));
     });
@@ -166,7 +159,7 @@ void main() {
         TripRecord(
           startTime: DateTime(2026, 10, 27, 8, 0, 0),
           endTime: DateTime(2026, 10, 27, 8, 5, 0),
-          distanceKm: 0.45, // < 1km
+          distanceKm: 0.45,
           durationSec: 300,
           avgSpeedKmh: 15.0,
           maxSpeedKmh: 25.0,
@@ -175,7 +168,7 @@ void main() {
         TripRecord(
           startTime: DateTime(2026, 10, 27, 9, 0, 0),
           endTime: DateTime(2026, 10, 27, 9, 20, 0),
-          distanceKm: 3.8, // >= 1km
+          distanceKm: 3.8,
           durationSec: 1200,
           avgSpeedKmh: 30.0,
           maxSpeedKmh: 48.0,

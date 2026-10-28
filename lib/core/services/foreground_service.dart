@@ -2,12 +2,12 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-/// Quản lý Foreground Service gốc trên Android để giữ kết nối BLE sống
-/// liên tục trong nền (ngay cả khi vuốt đóng app hay tắt màn hình).
+/// Administra el Servicio en Primer Plano (Foreground Service) nativo de Android
+/// para mantener viva la conexión BLE en segundo plano.
 class ForegroundService {
   static const _channel = MethodChannel('vn.datbike/export');
 
-  /// Bật Foreground Service với thông báo thường trực
+  /// Inicia el servicio en primer plano con notificación permanente
   static Future<void> start({String? title, String? text}) async {
     if (!Platform.isAndroid) return;
     try {
@@ -22,7 +22,7 @@ class ForegroundService {
     } catch (_) {}
   }
 
-  /// Tắt Foreground Service khi người dùng chủ động ngắt kết nối
+  /// Detiene el Foreground Service al desconectarse
   static Future<void> stop() async {
     if (!Platform.isAndroid) return;
     try {

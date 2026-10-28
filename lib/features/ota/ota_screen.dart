@@ -1,5 +1,3 @@
-// OTA — Xem firmware mới nhất + tải board về máy (Kinetic Stitch EV).
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -7,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../core/ota/ota_service.dart';
 import '../../ui/app_theme.dart';
 import '../../ui/widgets.dart';
+import 'widgets/board_firmware_card.dart';
 
 class OtaScreen extends ConsumerStatefulWidget {
   const OtaScreen({super.key});
@@ -37,7 +36,7 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
       setState(() => _done.add(b.board));
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Đã tải ${b.board} → ${file.path}'),
+          content: Text('Descargado ${b.board} → ${file.path}'),
           backgroundColor: AppColors.tertiary,
         ),
       );
@@ -57,7 +56,7 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: Color(0xFF0F172A)),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20, color: AppColors.textPrimary),
           onPressed: () {
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();
@@ -66,11 +65,11 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
         ),
         centerTitle: true,
         title: Text(
-          'OTA Firmware',
+          'Firmware OTA BSKMT',
           style: GoogleFonts.plusJakartaSans(
             fontWeight: FontWeight.w700,
             fontSize: 18,
-            color: const Color(0xFF0F172A),
+            color: AppColors.textPrimary,
           ),
         ),
       ),
@@ -98,12 +97,12 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Không thể kết nối máy chủ OTA',
+                      'No se pudo conectar al servidor OTA',
                       style: GoogleFonts.spaceGrotesk(fontSize: 16, fontWeight: FontWeight.w700),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Kiểm tra lại kết nối Internet hoặc thử lại sau.',
+                      'Verifique su conexión a Internet o intente más tarde.',
                       textAlign: TextAlign.center,
                       style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
                     ),
@@ -117,7 +116,7 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
                       ),
                       onPressed: () => setState(() => _future = _ota.fetchLatest()),
                       icon: const Icon(Icons.refresh_rounded, size: 18),
-                      label: Text('Thử lại', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
+                      label: Text('Reintentar', style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600)),
                     ),
                   ],
                 ),
@@ -127,7 +126,6 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
           return ListView(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
             children: [
-              // Hero Firmware Version Card
               Panel(
                 padding: const EdgeInsets.all(20),
                 borderRadius: 20,
@@ -151,7 +149,7 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'BẢN PHÁT HÀNH MỚI NHẤT',
+                                'ÚLTIMA VERSIÓN DISPONIBLE',
                                 style: GoogleFonts.plusJakartaSans(
                                   fontSize: 10.5,
                                   fontWeight: FontWeight.w700,
@@ -172,9 +170,9 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
                           ),
                         ),
                         if (fw.isBeta)
-                          StatusPill(label: 'BETA', color: AppColors.amber)
+                          const StatusPill(label: 'BETA', color: AppColors.amber)
                         else
-                          StatusPill(label: 'OFFICIAL', color: AppColors.tertiary),
+                          const StatusPill(label: 'OFICIAL', color: AppColors.tertiary),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -192,87 +190,19 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-
-              const SectionTitle('DANH SÁCH BO MẠCH (BOARDS)'),
+              const SectionTitle('MÓDULOS DE CONTROL (BOARDS)'),
               const SizedBox(height: 10),
-
               for (final b in fw.boards)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Panel(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    borderRadius: 16,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              _done.contains(b.board)
-                                  ? Icons.check_circle_rounded
-                                  : Icons.memory_rounded,
-                              color: _done.contains(b.board) ? AppColors.tertiary : AppColors.primary,
-                              size: 24,
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    b.board,
-                                    style: GoogleFonts.spaceGrotesk(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15,
-                                      color: AppColors.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    'Revision: ${b.revision ?? "Mặc định"}',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 12,
-                                      color: AppColors.textDim,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            _done.contains(b.board)
-                                ? StatusPill(label: 'ĐÃ TẢI', color: AppColors.tertiary)
-                                : IconButton(
-                                    style: IconButton.styleFrom(
-                                      backgroundColor: AppColors.panelSecondary,
-                                      foregroundColor: AppColors.primary,
-                                    ),
-                                    icon: const Icon(Icons.download_rounded, size: 20),
-                                    tooltip: 'Tải về máy',
-                                    onPressed: () => _download(b),
-                                  ),
-                          ],
-                        ),
-                        if (_progress.containsKey(b.board) && !_done.contains(b.board)) ...[
-                          const SizedBox(height: 12),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(9999),
-                            child: LinearProgressIndicator(
-                              value: _progress[b.board],
-                              minHeight: 5,
-                              color: AppColors.primary,
-                              backgroundColor: AppColors.panelSecondary,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+                BoardFirmwareCard(
+                  board: b,
+                  isDone: _done.contains(b.board),
+                  progress: _progress[b.board],
+                  onDownload: () => _download(b),
                 ),
-
               const SizedBox(height: 14),
-              NoticeBanner(
+              const NoticeBanner(
                 color: AppColors.secondary,
-                text: 'Lưu ý: Chỉ tải firmware để tham chiếu hoặc cập nhật khi có hướng dẫn kỹ thuật. '
-                    'Truyền OTA BLE qua FAST_OTA service sẽ được mở ở Phase tiếp theo.',
+                text: 'Nota: La descarga de firmware está destinada a referencia técnica y servicio autorizado BSKMT.',
               ),
             ],
           );

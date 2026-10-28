@@ -1,6 +1,5 @@
-// Scan — Quét BLE tìm xe Dat Bike (Kinetic Stitch EV).
-// Xe dùng RPA (MAC xoay vòng) và tên quảng bá thay đổi ('dat.bik3' / 'Dat Bike Quantum S1'),
-// giao diện sáng sủa, thẻ trắng viền hairline, chỉ thị RSSI trực quan.
+// Scan — Búsqueda BLE de vehículos BSKMT.
+// Soporta nombres publicitados BSKMT, Quantum y Dat Bike.
 
 import 'dart:async';
 
@@ -9,13 +8,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/ble/ble_controller.dart';
 import '../../core/ble/ble_logger.dart';
 import '../../core/ble/ble_permissions.dart';
 import '../../ui/app_theme.dart';
 import '../../ui/widgets.dart';
+import 'widgets/scan_bike_tile.dart';
+import 'widgets/scan_empty_state.dart';
+import 'widgets/scan_other_device_tile.dart';
+import 'widgets/scan_permission_dialog.dart';
+import 'widgets/scan_reconnect_card.dart';
 
 class ScanScreen extends ConsumerStatefulWidget {
   const ScanScreen({super.key});
@@ -52,10 +55,12 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     final name = '${r.advertisementData.advName} ${r.device.platformName}'
         .toLowerCase()
         .replaceAll('.', ' ');
-    return name.contains('dat bik') ||
-        name.contains('datbike') ||
+    return name.contains('bskmt') ||
+        name.contains('bike') ||
+        name.contains('moto') ||
         name.contains('quantum') ||
-        name.contains('dat.bik');
+        name.contains('dat bik') ||
+        name.contains('datbike');
   }
 
   Future<void> _scan() async {
@@ -75,10 +80,10 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     if (!ok) {
       setState(() {
         _scanning = false;
-        _error = 'Thiếu quyền Bluetooth/Vị trí — không thể quét.';
+        _error = 'Permisos de Bluetooth y Ubicación requeridos para escanear.';
       });
       if (await BlePermissions.permanentlyDenied() && mounted) {
-        _openSettingsDialog();
+        ScanPermissionDialog.show(context);
       }
       return;
     }
@@ -87,7 +92,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     if (adapter != BluetoothAdapterState.on) {
       setState(() {
         _scanning = false;
-        _error = 'Bluetooth đang tắt — hãy bật Bluetooth rồi quét lại.';
+        _error = 'Bluetooth apagado — por favor encienda el Bluetooth y reintente.';
       });
       return;
     }
@@ -131,7 +136,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         : r.device.platformName;
     Navigator.of(context).pushReplacementNamed('/connecting', arguments: {
       'device': r.device,
-      'name': name.isEmpty ? 'Dat Bike' : name,
+      'name': name.isEmpty ? 'Moto BSKMT' : name,
     });
   }
 
@@ -141,57 +146,14 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
     final dev = BluetoothDevice.fromId(_lastBikeId!);
     Navigator.of(context).pushReplacementNamed('/connecting', arguments: {
       'device': dev,
-      'name': _lastBikeName ?? 'Dat Bike',
+      'name': _lastBikeName ?? 'Moto BSKMT',
     });
-  }
-
-  void _openSettingsDialog() {
-    showDialog<void>(
-      context: context,
-      builder: (c) => AlertDialog(
-        backgroundColor: AppColors.panel,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(
-          'Cần quyền Bluetooth & Vị trí',
-          style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600, fontSize: 18),
-        ),
-        content: Text(
-          'Quyền bị từ chối vĩnh viễn. Mở Cài đặt hệ thống → Ứng dụng → Quyền để cấp lại.',
-          style: GoogleFonts.plusJakartaSans(color: AppColors.textDim, fontSize: 14),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(c),
-            child: Text('HỦY', style: GoogleFonts.plusJakartaSans(color: AppColors.textDim)),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-              shape: const StadiumBorder(),
-            ),
-            onPressed: () {
-              openAppSettings();
-              Navigator.pop(c);
-            },
-            child: Text('MỞ CÀI ĐẶT', style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700)),
-          ),
-        ],
-      ),
-    );
   }
 
   @override
   void dispose() {
     _sub?.cancel();
     super.dispose();
-  }
-
-  String _rssiBars(int rssi) {
-    if (rssi >= -55) return '▂▄▆█';
-    if (rssi >= -70) return '▂▄▆_';
-    if (rssi >= -85) return '▂▄__';
-    return '▂___';
   }
 
   @override
@@ -204,7 +166,7 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         title: Text(
-          'TÌM XE BLUETOOTH',
+          'VINCULAR MOTO BLUETOOTH',
           style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700, fontSize: 18),
         ),
       ),
@@ -213,272 +175,38 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
           children: [
-            // Kết nối lại xe đã nhớ
             if (_lastBikeId != null) ...[
-              Panel(
-                onTap: _directConnecting ? null : _connectDirect,
-                padding: const EdgeInsets.all(16),
-                borderRadius: 20,
-                hasActiveHalo: true,
-                child: Row(
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.10),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: AppColors.primary.withValues(alpha: 0.25)),
-                      ),
-                      child: const Icon(Icons.history_rounded, color: AppColors.primary, size: 26),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            _lastBikeName ?? 'Xe đã kết nối gần nhất',
-                            style: GoogleFonts.spaceGrotesk(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          Text(
-                            'Bấm để kết nối trực tiếp không cần chờ quét',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 12,
-                              color: AppColors.textDim,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    _directConnecting
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.primary),
-                  ],
-                ),
+              ScanReconnectCard(
+                bikeName: _lastBikeName,
+                connecting: _directConnecting,
+                onTap: _connectDirect,
               ),
               const SizedBox(height: 16),
             ],
-
             if (_error != null) ...[
               NoticeBanner(color: AppColors.error, text: _error!),
               const SizedBox(height: 14),
             ],
-
-            // Xe tìm thấy
             if (bikes.isNotEmpty) ...[
-              const SectionTitle('XE CỦA BẠN PHÁT HIỆN ĐƯỢC'),
+              const SectionTitle('MOTOS DETECTADAS'),
               const SizedBox(height: 10),
               for (final r in bikes)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Panel(
-                    onTap: () => _connect(r),
-                    padding: const EdgeInsets.all(16),
-                    borderRadius: 20,
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 50,
-                          height: 50,
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary.withValues(alpha: 0.10),
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
-                          ),
-                          child: const Icon(Icons.electric_moped_rounded, color: AppColors.secondary, size: 28),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (r.advertisementData.advName.isNotEmpty
-                                        ? r.advertisementData.advName
-                                        : r.device.platformName)
-                                    .ifEmpty('(Không tên)'),
-                                style: GoogleFonts.spaceGrotesk(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 16,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Text(
-                                    _rssiBars(r.rssi),
-                                    style: const TextStyle(
-                                      color: AppColors.tertiary,
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w900,
-                                      fontFamily: 'monospace',
-                                    ),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    '${r.rssi} dBm · ${r.device.remoteId.str}',
-                                    style: GoogleFonts.plusJakartaSans(
-                                      fontSize: 12,
-                                      color: AppColors.textDim,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.primary),
-                      ],
-                    ),
-                  ),
+                ScanBikeTile(
+                  result: r,
+                  onTap: () => _connect(r),
                 ),
             ],
-
-            // Xe phát hiện trên Web Preview (Mô phỏng quét BLE)
-            if (kIsWeb) ...[
-              const SectionTitle('XE CỦA BẠN PHÁT HIỆN ĐƯỢC (BLE)'),
-              const SizedBox(height: 10),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Panel(
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Đã xác thực & ghép đôi chìa khóa số BLE xe Dat Bike Quantum S1!',
-                          style: GoogleFonts.plusJakartaSans(),
-                        ),
-                        backgroundColor: const Color(0xFF10B981),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    );
-                    Navigator.of(context).pop();
-                  },
-                  padding: const EdgeInsets.all(16),
-                  borderRadius: 20,
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: AppColors.secondary.withValues(alpha: 0.10),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: AppColors.secondary.withValues(alpha: 0.25)),
-                        ),
-                        child: const Icon(Icons.electric_moped_rounded, color: AppColors.secondary, size: 28),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Dat Bike Quantum S1',
-                              style: GoogleFonts.spaceGrotesk(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                const Text(
-                                  '▂▄▆█',
-                                  style: TextStyle(
-                                    color: AppColors.tertiary,
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w900,
-                                    fontFamily: 'monospace',
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '-58 dBm · RL9C4NGSSSCC00187',
-                                  style: GoogleFonts.plusJakartaSans(
-                                    fontSize: 12,
-                                    color: AppColors.textDim,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: AppColors.primary),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 12),
-            ],
-
-            // Gợi ý khi chưa thấy
             if (bikes.isEmpty && !_scanning && !kIsWeb) ...[
-              Panel(
-                padding: const EdgeInsets.all(24),
-                borderRadius: 20,
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withValues(alpha: 0.08),
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(Icons.bluetooth_searching_rounded, size: 36, color: AppColors.primary),
-                    ),
-                    const SizedBox(height: 14),
-                    Text(
-                      'Chưa tìm thấy xe gần đây',
-                      style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700, fontSize: 16),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '• Đảm bảo xe đã bật nguồn hoặc chìa khóa mở\n'
-                      '• Đứng gần xe trong bán kính 3-5 mét\n'
-                      '• Kiểm tra Bluetooth trên điện thoại đang bật',
-                      textAlign: TextAlign.center,
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 13,
-                        color: AppColors.textDim,
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        shape: const StadiumBorder(),
-                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      ),
-                      icon: const Icon(Icons.radar, size: 18),
-                      label: Text('Quét lại', style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w600)),
-                      onPressed: _scan,
-                    ),
-                  ],
-                ),
-              ),
+              ScanEmptyState(onRetry: _scan),
               const SizedBox(height: 16),
             ],
-
-            // Thiết bị khác
             const SizedBox(height: 8),
             Row(
               children: [
-                const SectionTitle('THIẾT BỊ KHÁC'),
+                const SectionTitle('OTROS DISPOSITIVOS'),
                 const Spacer(),
                 Text(
-                  '${others.length} thiết bị',
+                  '${others.length} dispositivos',
                   style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textDim),
                 ),
                 const SizedBox(width: 8),
@@ -490,38 +218,9 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
             ),
             if (_showAll)
               for (final r in others)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Panel(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    borderRadius: 14,
-                    onTap: () => _connect(r),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.bluetooth_rounded, size: 20, color: AppColors.textDim),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                (r.advertisementData.advName.isNotEmpty
-                                        ? r.advertisementData.advName
-                                        : r.device.platformName)
-                                    .ifEmpty('(Không tên)'),
-                                style: GoogleFonts.plusJakartaSans(fontSize: 13.5, fontWeight: FontWeight.w600),
-                              ),
-                              Text(
-                                '${r.device.remoteId.str} · ${r.rssi} dBm',
-                                style: GoogleFonts.plusJakartaSans(fontSize: 11.5, color: AppColors.textDim),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.chevron_right, size: 18, color: AppColors.textDim),
-                      ],
-                    ),
-                  ),
+                ScanOtherDeviceTile(
+                  result: r,
+                  onTap: () => _connect(r),
                 ),
           ],
         ),
@@ -539,15 +238,8 @@ class _ScanScreenState extends ConsumerState<ScanScreen> {
                 child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
               )
             : const Icon(Icons.radar),
-        label: Text(
-          _scanning ? 'Đang quét…' : 'Quét xe',
-          style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700),
-        ),
+        label: Text(_scanning ? 'Buscando…' : 'Buscar moto', style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700)),
       ),
     );
   }
-}
-
-extension _IfEmpty on String {
-  String ifEmpty(String other) => isEmpty ? other : this;
 }
