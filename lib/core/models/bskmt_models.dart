@@ -85,6 +85,25 @@ class BskmtMotorcycle {
   final String? insuranceCompany;
   final String? policyNumber;
 
+  String get line => modelLine;
+  String get model => modelLine;
+  String? get vin => null;
+
+  dynamic operator [](String key) {
+    switch (key) {
+      case 'id': return id;
+      case 'brand': return brand;
+      case 'line':
+      case 'model':
+      case 'modelLine': return modelLine;
+      case 'plate': return plate;
+      case 'year': return year;
+      case 'color': return color;
+      case 'displacementCc': return displacementCc;
+      default: return null;
+    }
+  }
+
   const BskmtMotorcycle({
     required this.id,
     required this.brand,

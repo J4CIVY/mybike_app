@@ -5,7 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../core/ble/ble_controller.dart' show TripRecord, TripGpsPoint;
+import 'package:mybike_app/core/ble/ble_models.dart';
 
 class TripRouteUtils {
   static Color getContinuousSpeedColor(double speedKmh) {

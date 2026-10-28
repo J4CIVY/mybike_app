@@ -147,9 +147,9 @@ class _MyBikeScreenState extends ConsumerState<MyBikeScreen> {
     final telemetry = ble.lastTelemetry;
     final hasTelemetry = connected && telemetry != null;
 
-    final bikeDisplayName = bskmt.activeMotorcycle?['plate'] ?? ble.bikeCustomName ?? ble.device?.platformName ?? 'Mi Moto Eléctrica';
-    final percent = telemetry?.batteryPercent ?? 0;
-    final kmLeft = telemetry?.rangeKm ?? 0;
+    final bikeDisplayName = bskmt.activeMotorcycle?.plate ?? ble.bikeName ?? ble.device?.platformName ?? 'Mi Moto Eléctrica';
+    final percent = telemetry?.percent ?? 0;
+    final kmLeft = telemetry?.kmLeft.round() ?? 0;
     final percentDisplay = percent > 0 ? '$percent' : '--';
     final kmLeftDisplay = kmLeft > 0 ? '$kmLeft' : '--';
 

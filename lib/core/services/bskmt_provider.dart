@@ -1,5 +1,9 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:mybike_app/core/models/bskmt_models.dart';
 import 'bskmt_api_service.dart';
+
+export 'package:mybike_app/core/models/bskmt_models.dart';
+export 'bskmt_api_service.dart';
 
 class BskmtState {
   final bool isLoading;
@@ -32,12 +36,12 @@ class BskmtState {
     BskmtUser? user,
     List<BskmtMotorcycle>? motorcycles,
     BskmtMotorcycle? activeMotorcycle,
+    bool clearActiveMotorcycle = false,
     List<BskmtDocumentAlert>? documentAlerts,
     List<BskmtAlliedWorkshop>? alliedWorkshops,
     String? errorMessage,
     String? successMessage,
     DateTime? lastSyncedAt,
-    bool clearActiveMotorcycle = false,
   }) {
     return BskmtState(
       isLoading: isLoading ?? this.isLoading,
@@ -54,11 +58,13 @@ class BskmtState {
   }
 }
 
-class BskmtNotifier extends StateNotifier<BskmtState> {
+class BskmtNotifier extends Notifier<BskmtState> {
   final BskmtApiService _api = BskmtApiService.instance;
 
-  BskmtNotifier() : super(const BskmtState()) {
-    init();
+  @override
+  BskmtState build() {
+    Future.microtask(init);
+    return const BskmtState();
   }
 
   Future<void> init() async {
@@ -83,12 +89,12 @@ class BskmtNotifier extends StateNotifier<BskmtState> {
         state = state.copyWith(
           isAuthenticated: true,
           user: user,
-          successMessage: '¡Bienvenido, ${user.displayName}!',
+          errorMessage: null,
         );
         await refreshGarage();
         return true;
       }
-      state = state.copyWith(isLoading: false, errorMessage: 'Error al iniciar sesión');
+      state = state.copyWith(isLoading: false, errorMessage: 'Credenciales inválidas');
       return false;
     } catch (e) {
       final msg = e.toString().replaceFirst('Exception: ', '');
@@ -98,77 +104,58 @@ class BskmtNotifier extends StateNotifier<BskmtState> {
   }
 
   Future<void> logout() async {
-    state = state.copyWith(isLoading: true);
     await _api.logout();
     state = const BskmtState();
   }
 
   Future<void> refreshGarage() async {
-    if (!state.isAuthenticated) {
-      state = state.copyWith(isLoading: false);
-      return;
-    }
-
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final data = await _api.fetchGarageDashboard();
-      final motorcycles = (data['motorcycles'] as List<BskmtMotorcycle>?) ?? [];
-      final activeMoto = data['activeMotorcycle'] as BskmtMotorcycle? ??
-          (motorcycles.isNotEmpty ? motorcycles.first : null);
+      final motos = (data['motorcycles'] as List<BskmtMotorcycle>?) ?? [];
       final alerts = (data['documentAlerts'] as List<BskmtDocumentAlert>?) ?? [];
       final workshops = (data['alliedWorkshops'] as List<BskmtAlliedWorkshop>?) ?? [];
+      final active = data['activeMotorcycle'] as BskmtMotorcycle?;
 
       state = state.copyWith(
         isLoading: false,
-        motorcycles: motorcycles,
-        activeMotorcycle: activeMoto,
+        motorcycles: motos,
+        activeMotorcycle: active ?? (motos.isNotEmpty ? motos.first : null),
         documentAlerts: alerts,
         alliedWorkshops: workshops,
         lastSyncedAt: DateTime.now(),
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: 'Error al sincronizar garaje BSKMT');
+      final msg = e.toString().replaceFirst('Exception: ', '');
+      state = state.copyWith(isLoading: false, errorMessage: msg);
     }
   }
 
-  void selectMotorcycle(String id) {
-    final found = state.motorcycles.firstWhere(
-      (m) => m.id == id,
-      orElse: () => state.motorcycles.first,
-    );
-    state = state.copyWith(activeMotorcycle: found);
-  }
-
-  /// Sincroniza el odómetro del viaje/moto actual con el Garaje BSKMT
-  Future<bool> syncCurrentOdometer(double km) async {
-    final moto = state.activeMotorcycle;
-    if (moto == null || moto.id.isEmpty) return false;
-
-    // Solo actualizar si el km es mayor o relevante
-    if (km <= moto.currentOdometerKm && km > 0) return true;
-
-    final ok = await _api.updateOdometer(
-      motorcycleId: moto.id,
-      odometerKm: km,
-      source: 'APP_COCKPIT_BLE',
-    );
-
-    if (ok) {
-      await refreshGarage();
-      return true;
+  void selectMotorcycle(dynamic motoOrId) {
+    if (motoOrId is BskmtMotorcycle) {
+      state = state.copyWith(activeMotorcycle: motoOrId);
+    } else if (motoOrId is String) {
+      final found = state.motorcycles.where((m) => m.id == motoOrId).firstOrNull;
+      if (found != null) {
+        state = state.copyWith(activeMotorcycle: found);
+      }
     }
-    return false;
   }
 
-  /// Solicita ayuda ARPHA en carretera
+  Future<bool> syncOdometer(num odo) async {
+    final motoId = state.activeMotorcycle?.id;
+    if (motoId == null || motoId.isEmpty) return false;
+    return _api.updateOdometer(motorcycleId: motoId, odometerKm: odo.toDouble());
+  }
+
   Future<bool> requestArphaHelp({
     required double lat,
     required double lng,
     required String requestType,
     required String description,
   }) async {
+    state = state.copyWith(isLoading: true, errorMessage: null, successMessage: null);
     try {
-      state = state.copyWith(isLoading: true, errorMessage: null);
       await _api.requestArphaSos(
         latitude: lat,
         longitude: lng,
@@ -193,6 +180,4 @@ class BskmtNotifier extends StateNotifier<BskmtState> {
   }
 }
 
-final bskmtProvider = StateNotifierProvider<BskmtNotifier, BskmtState>((ref) {
-  return BskmtNotifier();
-});
+final bskmtProvider = NotifierProvider<BskmtNotifier, BskmtState>(BskmtNotifier.new);

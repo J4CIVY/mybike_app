@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-
-import '../../core/ble/ble_controller.dart';
+import 'package:mybike_app/core/ble/ble_controller.dart';
 import 'lab_models.dart';
 
 class LabTestUiState {
@@ -18,4 +17,3 @@ class LabTestUiState {
     note.dispose();
   }
 }
-

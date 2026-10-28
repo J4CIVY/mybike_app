@@ -27,6 +27,7 @@ class AppColors {
 
   // Colores Principales de Marca BSKMT
   static const primary = Color(0xFFDC2626); // Rojo BSKMT (Red 600)
+  static const crimson = Color(0xFFDC2626);
   static const primaryRose = Color(0xFFE11D48); // Rose 600 BSKMT
   static const primaryContainer = Color(0xFF991B1B); // Red 800
   static const onPrimary = Color(0xFFFFFFFF);
@@ -94,3 +95,8 @@ class AppColors {
   );
 }
 
+/// Alias para compatibilidad con widgets del tema BSKMT
+class BskmtColors {
+  BskmtColors._();
+  static const crimson = Color(0xFFDC2626);
+}

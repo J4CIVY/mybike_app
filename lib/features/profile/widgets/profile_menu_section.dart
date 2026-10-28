@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../ui/app_theme.dart';
-import '../battery/battery_diagnostics_screen.dart';
-import '../dashboard/dashboard_screen.dart';
-import '../firmware_lab/firmware_lab_screen.dart';
-import '../logs/logs_screen.dart';
-import '../ota/ota_screen.dart';
-import '../settings/vehicle_settings_screen.dart';
+import 'package:mybike_app/features/battery/battery_diagnostics_screen.dart';
+import 'package:mybike_app/features/dashboard/dashboard_screen.dart';
+import 'package:mybike_app/features/firmware_lab/firmware_lab_screen.dart';
+import 'package:mybike_app/features/logs/logs_screen.dart';
+import 'package:mybike_app/features/ota/ota_screen.dart';
+import 'package:mybike_app/features/settings/vehicle_settings_screen.dart';
 
 class ProfileMenuSection extends StatelessWidget {
   final bool isAuthenticated;

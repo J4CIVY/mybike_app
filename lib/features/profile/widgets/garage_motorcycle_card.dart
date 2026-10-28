@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import '../../../core/services/bskmt_models.dart';
+import 'package:mybike_app/core/models/bskmt_models.dart';
 import '../../../ui/app_theme.dart';
 
 class GarageMotorcycleCard extends StatelessWidget {

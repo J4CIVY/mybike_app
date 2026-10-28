@@ -109,7 +109,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   }
 
   Future<void> _syncOdoWithBskmt(double odoKm) async {
-    final success = await ref.read(bskmtProvider.notifier).syncOdometer(odoKm.toInt());
+    final success = await ref.read(bskmtProvider.notifier).syncOdometer(odoKm);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
