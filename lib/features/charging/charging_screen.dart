@@ -1,19 +1,13 @@
 // Screen 2: Power Control (Charging) — Chuyên biệt hóa cho Xe Máy Điện Dat Bike
-// Thiết kế tham chiếu Geely EV nhưng tinh chỉnh 100% chuẩn sạc xe máy điện:
-// - Quãng đường tiêu chuẩn: 270 km ở trên (font rộng).
-// - Trung tâm: Xe máy điện 3D X-ray trong suốt lộ khối pin Li-ion xanh lá 34% (hoặc đồng bộ pin).
-// - 2 chỉ báo trạng thái: 🟢 Đã cắm sạc an toàn · 🔵 Cổng sạc nhanh Dat Charge.
-// - Bottom card Charging Details liệt kê thông số sạc thực tế xe máy điện:
-//     + Remaining Time: 35 phút (đến 100% pin)
-//     + Current: [DC] 3.3 kW · 45 A · 76.8 V (chuẩn pin 72V Li-ion Dat Bike)
-//     + Estimated Range After Charging: 270 km
-//     + Nút Stop màu xanh dương full-width.
+// Đồng bộ 100% với Telemetry thật từ xe (điện áp, dòng điện, công suất)
+// và tích hợp chọn Profile sạc Era (8a2b0d10) + Nút mở Bác Sĩ Pin 24-Cell.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/ble/ble_controller.dart';
+import '../battery/battery_diagnostics_screen.dart';
 
 class ChargingScreen extends ConsumerStatefulWidget {
   const ChargingScreen({super.key});
@@ -23,14 +17,40 @@ class ChargingScreen extends ConsumerStatefulWidget {
 }
 
 class _ChargingScreenState extends ConsumerState<ChargingScreen> {
-  bool _isCharging = true;
+  void _showSnack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.plusJakartaSans(fontSize: 13)),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final ble = ref.watch(bleProvider);
+    final connected = ble.phase == BlePhase.connected;
     final telemetry = ble.lastTelemetry;
-    final percent = telemetry?.percent ?? 68;
-    final voltage = telemetry?.voltage ?? 76.8;
+    final hasTelemetry = connected && telemetry != null;
+
+    final isCharging = hasTelemetry && (telemetry.charging != null || telemetry.phase > 0.5);
+    final percent = telemetry?.percent;
+    final percentStr = (hasTelemetry && percent != null) ? '$percent' : '--';
+    final voltage = telemetry?.voltage ?? 0.0;
+    final currentA = (telemetry?.phase ?? 0.0).abs();
+    final powerKw = (voltage * currentA / 1000.0);
+    final kmLeftVal = (telemetry != null && telemetry.kmLeft > 0)
+        ? telemetry.kmLeft.round()
+        : (percent != null ? ((percent / 100.0) * 270).round() : null);
+    final kmLeftStr = (hasTelemetry && kmLeftVal != null) ? '$kmLeftVal' : '--';
+
+    final etaSec = telemetry?.charging?.etaSec ?? 0;
+    final remainingTimeStr = isCharging
+        ? (etaSec > 0 ? '${(etaSec / 60).round()} phút' : 'Đang sạc...')
+        : '---';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -48,7 +68,7 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
         centerTitle: true,
         title: Text(
           'Power Control',
-          style: GoogleFonts.syne(
+          style: GoogleFonts.plusJakartaSans(
             fontSize: 18,
             fontWeight: FontWeight.w700,
             color: const Color(0xFF0F172A),
@@ -64,7 +84,7 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
               const SizedBox(height: 10),
 
               // ══════════════════════════════════════════════════════════════
-              // 1. HIỂN THỊ 270 km Ở TRÊN (Quãng đường tiêu chuẩn đầy pin Dat Bike)
+              // 1. HIỂN THỊ QUÃNG ĐƯỜNG DỰ TÍNH (Font rộng)
               // ══════════════════════════════════════════════════════════════
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -72,18 +92,19 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                 textBaseline: TextBaseline.alphabetic,
                 children: [
                   Text(
-                    '270',
-                    style: GoogleFonts.syne(
+                    kmLeftStr,
+                    style: GoogleFonts.spaceGrotesk(
                       fontSize: 54,
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1.0,
                       color: const Color(0xFF0F172A),
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     'km',
-                    style: GoogleFonts.syne(
+                    style: GoogleFonts.spaceGrotesk(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
                       color: const Color(0xFF64748B),
@@ -95,8 +116,7 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
               const SizedBox(height: 18),
 
               // ══════════════════════════════════════════════════════════════
-              // 2. TRUNG TÂM: XE MÁY ĐIỆN 3D HIỆU ỨNG TRONG SUỐT (X-RAY)
-              //    Lộ khối pin Li-ion xanh lá
+              // 2. TRUNG TÂM: XE MÁY ĐIỆN 3D X-RAY TRONG SUỐT LỘ PIN
               // ══════════════════════════════════════════════════════════════
               Container(
                 width: double.infinity,
@@ -116,7 +136,6 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                 child: Stack(
                   alignment: Alignment.center,
                   children: [
-                    // Ảnh X-Ray xe máy điện Dat Bike
                     Image.asset(
                       'assets/images/bike_xray.jpg',
                       fit: BoxFit.cover,
@@ -127,18 +146,20 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                       ),
                     ),
 
-                    // Khối Pin xanh lá hiển thị trực tiếp chuẩn mẫu ảnh Power Control
                     Positioned(
                       bottom: 24,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(
-                          color: const Color(0xE622C55E),
+                          color: isCharging ? const Color(0xE622C55E) : const Color(0xE60F172A),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: const Color(0xFF86EFAC), width: 1.5),
-                          boxShadow: const [
+                          border: Border.all(
+                            color: isCharging ? const Color(0xFF86EFAC) : const Color(0xFF334155),
+                            width: 1.5,
+                          ),
+                          boxShadow: [
                             BoxShadow(
-                              color: Color(0x6622C55E),
+                              color: isCharging ? const Color(0x6622C55E) : const Color(0x33000000),
                               blurRadius: 16,
                               spreadRadius: 2,
                             ),
@@ -147,29 +168,20 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Container(
-                              width: 14,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.white, width: 1.5),
-                                borderRadius: BorderRadius.circular(2),
-                              ),
-                              child: Align(
-                                alignment: Alignment.centerLeft,
-                                child: Container(
-                                  width: 4.5,
-                                  color: Colors.white,
-                                ),
-                              ),
+                            Icon(
+                              isCharging ? Icons.bolt_rounded : Icons.battery_charging_full_rounded,
+                              size: 16,
+                              color: Colors.white,
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Text(
-                              '$percent%',
-                              style: GoogleFonts.syne(
+                              '$percentStr%',
+                              style: GoogleFonts.spaceGrotesk(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
                                 letterSpacing: 0.5,
+                                fontFeatures: const [FontFeature.tabularFigures()],
                               ),
                             ),
                           ],
@@ -183,21 +195,19 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
               const SizedBox(height: 18),
 
               // ══════════════════════════════════════════════════════════════
-              // 3. TRẠNG THÁI KẾT NỐI SẠC XE MÁY ĐIỆN THỰC TẾ
-              //    - 🟢 Đã cắm nguồn sạc an toàn
-              //    - 🔵 Cổng sạc siêu tốc Dat Charge (hoặc Sạc gia đình 220V)
+              // 3. TRẠNG THÁI KẾT NỐI SẠC THẬT TỪ XE
               // ══════════════════════════════════════════════════════════════
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _statusBullet(
-                    color: _isCharging ? const Color(0xFF22C55E) : const Color(0xFF94A3B8),
-                    label: _isCharging ? 'Đã cắm sạc an toàn' : 'Chưa kết nối nguồn',
+                    color: isCharging ? const Color(0xFF22C55E) : const Color(0xFF94A3B8),
+                    label: isCharging ? 'Đang sạc an toàn' : (connected ? 'Chưa cắm sạc' : 'Chưa kết nối xe'),
                   ),
                   const SizedBox(width: 18),
                   _statusBullet(
                     color: const Color(0xFF2563EB),
-                    label: 'Cổng sạc nhanh Dat Charge',
+                    label: isCharging ? 'Cổng sạc Dat Charge' : 'Chuẩn sạc 72V Li-ion',
                   ),
                 ],
               ),
@@ -205,11 +215,7 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
               const SizedBox(height: 24),
 
               // ══════════════════════════════════════════════════════════════
-              // 4. BOTTOM CARD: CHARGING DETAILS (Thông số xe máy điện thực tế)
-              //    - Remaining Time: 35 phút (đến 100%)
-              //    - Current: [DC] 3.3 kW · 45 A · 76.8 V (Pin 72V)
-              //    - Estimated Range After Charging: 270 km
-              //    - Full-width Button: Stop (xanh dương)
+              // 4. BOTTOM CARD: CHARGING DETAILS
               // ══════════════════════════════════════════════════════════════
               Container(
                 width: double.infinity,
@@ -229,10 +235,9 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Tiêu đề Charging Details
                     Text(
                       'Charging Details',
-                      style: GoogleFonts.syne(
+                      style: GoogleFonts.plusJakartaSans(
                         fontSize: 18,
                         fontWeight: FontWeight.w700,
                         color: const Color(0xFF0F172A),
@@ -240,7 +245,7 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Hàng 1: Remaining Time  35 phút
+                    // Hàng 1: Thời gian còn lại
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -253,7 +258,7 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                           ),
                         ),
                         Text(
-                          _isCharging ? '35 phút' : '---',
+                          remainingTimeStr,
                           style: GoogleFonts.spaceGrotesk(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -265,12 +270,12 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
 
                     const Divider(color: Color(0xFFF1F5F9), height: 26, thickness: 1),
 
-                    // Hàng 2: Current   [DC] 3.3 kW · 45 A · 76.8 V (Pin 72V)
+                    // Hàng 2: Dòng điện, Áp, Công suất thật từ BMS
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Current',
+                          'Current / Power',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 14,
                             fontWeight: FontWeight.w500,
@@ -279,27 +284,28 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
                         ),
                         Row(
                           children: [
-                            // Badge DC xanh nhạt (chuẩn sạc pin xe máy điện)
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                               margin: const EdgeInsets.only(right: 8),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFDCFCE7),
+                                color: isCharging ? const Color(0xFFDCFCE7) : const Color(0xFFF1F5F9),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Text(
                                 'DC',
-                                style: GoogleFonts.syne(
+                                style: GoogleFonts.plusJakartaSans(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: const Color(0xFF16A34A),
+                                  color: isCharging ? const Color(0xFF16A34A) : const Color(0xFF64748B),
                                 ),
                               ),
                             ),
                             Text(
-                              _isCharging ? '3.3 kW · 45 A · ${voltage.toStringAsFixed(1)} V' : '0.0 kW · 0 A · ${voltage.toStringAsFixed(1)} V',
+                              hasTelemetry
+                                  ? '${powerKw.toStringAsFixed(2)} kW · ${currentA.toStringAsFixed(1)} A · ${voltage.toStringAsFixed(1)} V'
+                                  : '---',
                               style: GoogleFonts.spaceGrotesk(
-                                fontSize: 13.5,
+                                fontSize: 13,
                                 fontWeight: FontWeight.w600,
                                 color: const Color(0xFF0F172A),
                               ),
@@ -311,82 +317,92 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
 
                     const Divider(color: Color(0xFFF1F5F9), height: 26, thickness: 1),
 
-                    // Hàng 3: Estimated Range After Charging   270 km
+                    // Hàng 3: Nhiệt độ pack Pin
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          'Estimated Range\nAfter Charging',
+                          'Nhiệt độ BMS / Pin',
                           style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13.5,
-                            height: 1.3,
+                            fontSize: 14,
                             fontWeight: FontWeight.w500,
                             color: const Color(0xFF64748B),
                           ),
                         ),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.baseline,
-                          textBaseline: TextBaseline.alphabetic,
-                          children: [
-                            Text(
-                              '270',
-                              style: GoogleFonts.syne(
-                                fontSize: 32,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: -0.5,
-                                color: const Color(0xFF0F172A),
-                              ),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              'km',
-                              style: GoogleFonts.syne(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: const Color(0xFF64748B),
-                              ),
-                            ),
-                          ],
+                        Text(
+                          hasTelemetry ? '${(telemetry.bmsTemp).toStringAsFixed(1)} °C' : '---',
+                          style: GoogleFonts.spaceGrotesk(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: const Color(0xFF0F172A),
+                          ),
                         ),
                       ],
                     ),
 
-                    const SizedBox(height: 24),
+                    const Divider(color: Color(0xFFF1F5F9), height: 26, thickness: 1),
 
-                    // Hàng 4: Nút Stop màu xanh dương full-width
+                    // Hàng 4: Chọn Profile sạc Era (8a2b0d10)
+                    Text(
+                      'Cấu Hình Profile Sạc (Era 8a2b0d10)',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        _profilePill('Tiêu Chuẩn', 'Standard', ble.chargingProfile == 0, connected, () async {
+                          ref.read(bleProvider.notifier).setChargingProfile(0);
+                          final res = await ref.read(bleProvider.notifier).setFwChargingProfile(0);
+                          _showSnack(res);
+                        }),
+                        const SizedBox(width: 8),
+                        _profilePill('Sạc Nhanh', 'Fast', ble.chargingProfile == 1, connected, () async {
+                          ref.read(bleProvider.notifier).setChargingProfile(1);
+                          final res = await ref.read(bleProvider.notifier).setFwChargingProfile(1);
+                          _showSnack(res);
+                        }),
+                        const SizedBox(width: 8),
+                        _profilePill('Tăng Tốc', 'Boost', ble.chargingProfile == 2, connected, () async {
+                          ref.read(bleProvider.notifier).setChargingProfile(2);
+                          final res = await ref.read(bleProvider.notifier).setFwChargingProfile(2);
+                          _showSnack(res);
+                        }),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // Hàng 5: Nút mở Bác Sĩ Pin 24-Cell
                     SizedBox(
                       width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
+                      height: 50,
+                      child: ElevatedButton.icon(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _isCharging ? const Color(0xFF2563EB) : const Color(0xFF10B981),
+                          backgroundColor: const Color(0xFF10B981),
                           foregroundColor: Colors.white,
                           elevation: 0,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(14),
                           ),
                         ),
-                        onPressed: () {
-                          setState(() => _isCharging = !_isCharging);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                _isCharging ? 'Đã kích hoạt sạc pin an toàn' : 'Đã ngắt phiên sạc pin an toàn',
-                                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w500),
-                              ),
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                          );
-                        },
-                        child: Text(
-                          _isCharging ? 'Stop' : 'Start Charging',
-                          style: GoogleFonts.syne(
-                            fontSize: 16,
+                        icon: const Icon(Icons.medical_services_outlined, size: 20),
+                        label: Text(
+                          'Bác Sĩ Pin & Chẩn Đoán 24 Cell',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 15,
                             fontWeight: FontWeight.w700,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.3,
                           ),
                         ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const BatteryDiagnosticsScreen()),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -394,6 +410,47 @@ class _ChargingScreenState extends ConsumerState<ChargingScreen> {
               ),
 
               const SizedBox(height: 28),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _profilePill(String label, String sub, bool selected, bool connected, VoidCallback onTap) {
+    return Expanded(
+      child: InkWell(
+        onTap: connected ? onTap : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          decoration: BoxDecoration(
+            color: selected ? const Color(0xFFEFF6FF) : const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: selected ? const Color(0xFF2563EB) : const Color(0xFFE2E8F0),
+              width: selected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            children: [
+              Text(
+                label,
+                style: GoogleFonts.plusJakartaSans(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: selected ? const Color(0xFF2563EB) : const Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                sub,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w500,
+                  color: selected ? const Color(0xFF2563EB) : const Color(0xFF64748B),
+                ),
+              ),
             ],
           ),
         ),

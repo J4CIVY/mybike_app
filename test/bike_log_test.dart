@@ -1,4 +1,4 @@
-// Test decode protobuf BikeLogMsg/BatteryLogMsg/ChargerLogMsg.
+﻿// Test decode protobuf BikeLogMsg/BatteryLogMsg/ChargerLogMsg.
 // 
 // Byte được encode tay theo wire-format proto3 — đối chiếu docs/proto/bike.proto.
 

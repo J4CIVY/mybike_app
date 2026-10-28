@@ -12,7 +12,7 @@ import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 
 /// Bump mỗi lần build release — để đối chiếu log với code chính xác.
-const appBuild = '20261026b';
+const appBuild = '20261028a';
 
 class BleLogger {
   BleLogger._();

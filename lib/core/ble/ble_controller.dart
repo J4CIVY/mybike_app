@@ -18,12 +18,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../proto/bike_log.dart';
+import '../models/trip_gps_point.dart';
 import '../services/foreground_service.dart';
+import '../services/trip_gps_tracker.dart';
 import '../session/bike_session_crypto.dart';
 import '../utils/kalman_filter.dart';
 import 'ble_logger.dart';
 import 'ble_permissions.dart';
 import 'gatt.dart';
+
+export '../models/trip_gps_point.dart';
 
 enum BlePhase { idle, scanning, connecting, connected, reconnecting, disconnected }
 
@@ -68,6 +72,62 @@ class TripData {
       );
 }
 
+/// Bản ghi một chuyến đi thực tế được lưu vào bộ nhớ bền vững (SharedPreferences)
+class TripRecord {
+  final DateTime startTime;
+  final DateTime endTime;
+  final double distanceKm;
+  final int durationSec;
+  final double avgSpeedKmh;
+  final double maxSpeedKmh;
+  final int usedPercent;
+  final double? startOdo;
+  final double? endOdo;
+  final List<TripGpsPoint> route;
+
+  const TripRecord({
+    required this.startTime,
+    required this.endTime,
+    required this.distanceKm,
+    required this.durationSec,
+    required this.avgSpeedKmh,
+    required this.maxSpeedKmh,
+    required this.usedPercent,
+    this.startOdo,
+    this.endOdo,
+    this.route = const [],
+  });
+
+  Map<String, dynamic> toJson() => {
+    'startTime': startTime.toIso8601String(),
+    'endTime': endTime.toIso8601String(),
+    'distanceKm': distanceKm,
+    'durationSec': durationSec,
+    'avgSpeedKmh': avgSpeedKmh,
+    'maxSpeedKmh': maxSpeedKmh,
+    'usedPercent': usedPercent,
+    if (startOdo != null) 'startOdo': startOdo,
+    if (endOdo != null) 'endOdo': endOdo,
+    if (route.isNotEmpty) 'route': route.map((e) => e.toJson()).toList(),
+  };
+
+  factory TripRecord.fromJson(Map<String, dynamic> json) => TripRecord(
+    startTime: DateTime.tryParse(json['startTime'] as String? ?? '') ?? DateTime.now(),
+    endTime: DateTime.tryParse(json['endTime'] as String? ?? '') ?? DateTime.now(),
+    distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
+    durationSec: (json['durationSec'] as num?)?.toInt() ?? 0,
+    avgSpeedKmh: (json['avgSpeedKmh'] as num?)?.toDouble() ?? 0.0,
+    maxSpeedKmh: (json['maxSpeedKmh'] as num?)?.toDouble() ?? 0.0,
+    usedPercent: (json['usedPercent'] as num?)?.toInt() ?? 0,
+    startOdo: (json['startOdo'] as num?)?.toDouble(),
+    endOdo: (json['endOdo'] as num?)?.toDouble(),
+    route: (json['route'] as List?)
+            ?.map((e) => TripGpsPoint.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
+}
+
 /// Kết quả 1 thao tác lab (đọc/ghi) — trả về UI kèm đủ raw + decrypt + lỗi.
 class LabIoResult {
   final String op; // read | write_plain | write_protected
@@ -106,8 +166,13 @@ class BleState {
   final BatteryLogMsg? lastBattery;
   final bool isFindingBike;
   final TripData trip;
+  final List<TripRecord> tripHistory;
+  final String? userName;
   final bool autoLockWalkAway; // Auto-Secure: rời xa → tắt xe → BẬT khóa an toàn
   final bool walkUpUnlock; // Đến rất gần (RSSI mạnh ~1-2m) → tự MỞ khóa an toàn
+  final bool walkUpAutoPowerOn; // Tính năng phụ: Tự BẬT NGUỒN XE sẵn khi tới rất gần
+  final double? walkUpRssiThreshold; // Ngưỡng RSSI tùy chỉnh khi lại gần (-45 .. -72 dBm, mặc định -55.0)
+  final double? autoLockRssiThreshold; // Ngưỡng RSSI tùy chỉnh khi rời xa (-68 .. -95 dBm, mặc định -83.0)
   final bool antiTheft5m; // Chống trộm: rời xa ≥5m → TẮT xe bất kể trạng thái → khóa
   final bool antiForgetAlert;
   final int autoLockDistance; // 0: Gần (~-75dBm), 1: Vừa (~-85dBm), 2: Xa (~-92dBm)
@@ -126,6 +191,14 @@ class BleState {
   final int distanceMode; // 0=Tắt, 1=Gần, 2=Vừa, 3=Xa hơn (firmware DISTANCE)
   final int chargingProfile; // 0=Standard, 1=Fast, 2=Boost (firmware CHARGING)
   final bool isLocked; // Khóa chống trộm / Immobilizer (char 7f13fe5c: kháng lực bánh)
+  final String? bikeModelCode; // từ 4aae98e9 (vd: "QT_S1")
+  final String? boardManifest; // từ 73d50009 (vd: "1adadba-#-8c02b07-896e9a7")
+  final double? vescCurrent; // từ 35a9b4f6 float[0] (A)
+  final double? vescVoltage; // từ 35a9b4f6 float[1] (V)
+  final double? vescDutyCycle; // từ 35a9b4f6 float[2] (0.0..1.0)
+  final int? fwSpeedLimitRaw; // u8 từ 0a19a49a
+  final int? distanceRawU16; // u16 LE từ 5d681587
+  final bool vescProgActive; // bool từ b0ca953d
 
   const BleState({
     required this.phase,
@@ -141,8 +214,13 @@ class BleState {
     this.lastBattery,
     this.isFindingBike = false,
     this.trip = const TripData(),
+    this.tripHistory = const [],
+    this.userName,
     this.autoLockWalkAway = false,
     this.walkUpUnlock = false,
+    this.walkUpAutoPowerOn = false,
+    this.walkUpRssiThreshold,
+    this.autoLockRssiThreshold,
     this.antiTheft5m = false,
     this.antiForgetAlert = true,
     this.autoLockDistance = 1,
@@ -161,6 +239,14 @@ class BleState {
     this.chargingProfile = 0,
     this.isLocked = false,
     this.frameSerial,
+    this.bikeModelCode,
+    this.boardManifest,
+    this.vescCurrent,
+    this.vescVoltage,
+    this.vescDutyCycle,
+    this.fwSpeedLimitRaw,
+    this.distanceRawU16,
+    this.vescProgActive = false,
   });
 
   BleState copyWith({
@@ -177,8 +263,13 @@ class BleState {
     BatteryLogMsg? lastBattery,
     bool? isFindingBike,
     TripData? trip,
+    List<TripRecord>? tripHistory,
+    String? userName,
     bool? autoLockWalkAway,
     bool? walkUpUnlock,
+    bool? walkUpAutoPowerOn,
+    double? walkUpRssiThreshold,
+    double? autoLockRssiThreshold,
     bool? antiTheft5m,
     bool? antiForgetAlert,
     int? autoLockDistance,
@@ -197,6 +288,14 @@ class BleState {
     int? chargingProfile,
     bool? isLocked,
     String? frameSerial,
+    String? bikeModelCode,
+    String? boardManifest,
+    double? vescCurrent,
+    double? vescVoltage,
+    double? vescDutyCycle,
+    int? fwSpeedLimitRaw,
+    int? distanceRawU16,
+    bool? vescProgActive,
   }) =>
       BleState(
         phase: phase ?? this.phase,
@@ -212,8 +311,13 @@ class BleState {
         lastBattery: lastBattery ?? this.lastBattery,
         isFindingBike: isFindingBike ?? this.isFindingBike,
         trip: trip ?? this.trip,
+        tripHistory: tripHistory ?? this.tripHistory,
+        userName: userName ?? this.userName,
         autoLockWalkAway: autoLockWalkAway ?? this.autoLockWalkAway,
         walkUpUnlock: walkUpUnlock ?? this.walkUpUnlock,
+        walkUpAutoPowerOn: walkUpAutoPowerOn ?? this.walkUpAutoPowerOn,
+        walkUpRssiThreshold: walkUpRssiThreshold ?? this.walkUpRssiThreshold,
+        autoLockRssiThreshold: autoLockRssiThreshold ?? this.autoLockRssiThreshold,
         antiTheft5m: antiTheft5m ?? this.antiTheft5m,
         antiForgetAlert: antiForgetAlert ?? this.antiForgetAlert,
         autoLockDistance: autoLockDistance ?? this.autoLockDistance,
@@ -232,6 +336,14 @@ class BleState {
         chargingProfile: chargingProfile ?? this.chargingProfile,
         isLocked: isLocked ?? this.isLocked,
         frameSerial: frameSerial ?? this.frameSerial,
+        bikeModelCode: bikeModelCode ?? this.bikeModelCode,
+        boardManifest: boardManifest ?? this.boardManifest,
+        vescCurrent: vescCurrent ?? this.vescCurrent,
+        vescVoltage: vescVoltage ?? this.vescVoltage,
+        vescDutyCycle: vescDutyCycle ?? this.vescDutyCycle,
+        fwSpeedLimitRaw: fwSpeedLimitRaw ?? this.fwSpeedLimitRaw,
+        distanceRawU16: distanceRawU16 ?? this.distanceRawU16,
+        vescProgActive: vescProgActive ?? this.vescProgActive,
       );
 }
 
@@ -279,11 +391,15 @@ class BleController extends Notifier<BleState> {
   bool _recoveryDisconnect = false; // disconnect trong recovery: ĐỪNG đóng logger
   Uint8List? _sessionKey;
   int _writeCounter = 0;
+  String? _lastRawStatusSig;
 
   final _telemetry = StreamController<BikeTelemetry>.broadcast();
 
   static const _kAutoLockWalkAway = 'auto_lock_walk_away';
   static const _kWalkUpUnlock = 'walk_up_unlock';
+  static const _kWalkUpAutoPowerOn = 'walk_up_auto_power_on';
+  static const _kWalkUpRssiThreshold = 'walk_up_rssi_threshold';
+  static const _kAutoLockRssiThreshold = 'auto_lock_rssi_threshold';
   static const _kAntiTheft5m = 'anti_theft_5m';
   static const _kAntiForgetAlert = 'anti_forget_alert';
   static const _kAutoLockDistance = 'auto_lock_distance';
@@ -297,6 +413,8 @@ class BleController extends Notifier<BleState> {
   static const _kIdlingTurnOff = 'fw_idling_turn_off';
   static const _kDistanceMode = 'fw_distance_mode';
   static const _kChargingProfile = 'fw_charging_profile';
+  static const _kTripHistory = 'trip_history_v1';
+  static const _kUserName = 'user_profile_name';
 
   final _rssiKalman = KalmanFilter1D(processNoise: 0.008, measurementNoise: 4.0);
   double? _smoothedRssi;
@@ -322,13 +440,6 @@ class BleController extends Notifier<BleState> {
     return const BleState(phase: BlePhase.idle);
   }
 
-  void setMockState({bool? isLocked, BikeLogMsg? telemetry}) {
-    state = state.copyWith(
-      isLocked: isLocked ?? state.isLocked,
-      lastTelemetry: telemetry ?? state.lastTelemetry,
-    );
-  }
-
   void _initSavedBike() async {
     final SharedPreferences prefs;
     try {
@@ -349,6 +460,9 @@ class BleController extends Notifier<BleState> {
     final savedId = prefs.getString(_kLastBikeId);
     final autoLock = prefs.getBool(_kAutoLockWalkAway) ?? false;
     final walkUp = prefs.getBool(_kWalkUpUnlock) ?? false;
+    final walkUpPowerOn = prefs.getBool(_kWalkUpAutoPowerOn) ?? false;
+    final walkUpRssi = prefs.getDouble(_kWalkUpRssiThreshold);
+    final autoLockRssi = prefs.getDouble(_kAutoLockRssiThreshold);
     final theft5m = prefs.getBool(_kAntiTheft5m) ?? false;
     final antiForget = prefs.getBool(_kAntiForgetAlert) ?? true;
     final autoLockDist = prefs.getInt(_kAutoLockDistance) ?? 1;
@@ -362,10 +476,29 @@ class BleController extends Notifier<BleState> {
     final idlingOff = prefs.getBool(_kIdlingTurnOff) ?? false;
     final distM = prefs.getInt(_kDistanceMode) ?? 0;
     final chargeP = prefs.getInt(_kChargingProfile) ?? 0;
+    final savedUserName = prefs.getString(_kUserName);
+
+    List<TripRecord> loadedHistory = [];
+    final tripHistJson = prefs.getString(_kTripHistory);
+    if (tripHistJson != null && tripHistJson.isNotEmpty) {
+      try {
+        final decoded = jsonDecode(tripHistJson) as List<dynamic>;
+        loadedHistory = decoded
+            .map((e) => TripRecord.fromJson(e as Map<String, dynamic>))
+            .where((e) => e.distanceKm >= 1.0)
+            .toList();
+      } catch (_) {}
+    }
+
     state = state.copyWith(
       bikeName: (savedId != null && savedName != null) ? savedName : state.bikeName,
+      userName: savedUserName,
+      tripHistory: loadedHistory,
       autoLockWalkAway: autoLock,
       walkUpUnlock: walkUp,
+      walkUpAutoPowerOn: walkUpPowerOn,
+      walkUpRssiThreshold: walkUpRssi,
+      autoLockRssiThreshold: autoLockRssi,
       antiTheft5m: theft5m,
       antiForgetAlert: antiForget,
       autoLockDistance: autoLockDist,
@@ -383,6 +516,104 @@ class BleController extends Notifier<BleState> {
     // Tự động kết nối ngay khi mở app nếu đã từng kết nối xe trước đó
     if (savedId != null && savedId.isNotEmpty) {
       unawaited(tryRestoreLastBike());
+    }
+  }
+
+  /// Cập nhật tên chủ xe hiển thị
+  Future<void> setUserName(String name) async {
+    final trimmed = name.trim();
+    final prefs = await _prefs;
+    await prefs.setString(_kUserName, trimmed);
+    state = state.copyWith(userName: trimmed);
+    BleLogger.instance.event('user_name_updated', {'name': trimmed});
+  }
+
+  /// Xóa toàn bộ lịch sử chuyến đi
+  Future<void> clearTripHistory() async {
+    state = state.copyWith(tripHistory: const []);
+    try {
+      final prefs = await _prefs;
+      await prefs.remove(_kTripHistory);
+      BleLogger.instance.event('trip_history_cleared', {});
+    } catch (_) {}
+  }
+
+  /// Tự động lưu chuyến đi hiện tại vào lịch sử.
+  /// QUY TẮC: Chỉ lưu hành trình nếu quãng đường di chuyển từ 1km trở lên (>= 1.0 km).
+  /// Nếu di chuyển dưới 1km (< 1.0 km) thì tuyệt đối không lưu hành trình.
+  Future<void> _archiveCurrentTripIfMeaningful() async {
+    final trip = state.trip;
+    final durSec = trip.duration.inSeconds;
+    final gpsDistKm = TripGpsTracker.instance.totalDistanceKm;
+    // Lấy quãng đường lớn hơn giữa ODO xe và GPS
+    final effectiveDistKm = trip.distanceKm > 0 ? trip.distanceKm : gpsDistKm;
+
+    // QUY TẮC CỐT LÕI: Dưới 1km (< 1.0 km) thì KHÔNG lưu hành trình
+    if (effectiveDistKm < 1.0 || _tripStartTime == null) {
+      BleLogger.instance.event('trip_skipped_under_1km', {
+        'distance_km': effectiveDistKm,
+        'odo_dist_km': trip.distanceKm,
+        'gps_dist_km': gpsDistKm,
+        'duration_sec': durSec,
+      });
+      // Dừng tracking và giải phóng bộ nhớ GPS của cuốc đi ngắn
+      TripGpsTracker.instance.stopTracking();
+      TripGpsTracker.instance.clear();
+      // Reset mốc chuyến đi hiện tại để cuốc tiếp theo tính mới
+      final curTele = state.lastTelemetry;
+      _tripStartOdo = curTele?.odo;
+      _tripStartTime = null;
+      _tripStartPercent = curTele?.percent;
+      _tripMaxSpeed = 0.0;
+      _tripSpeedSum = 0.0;
+      _tripSpeedSamples = 0;
+      state = state.copyWith(
+        trip: TripData(powerKw: state.trip.powerKw),
+      );
+      return;
+    }
+
+    final now = DateTime.now();
+    final recordedRoute = TripGpsTracker.instance.stopTracking();
+    final record = TripRecord(
+      startTime: _tripStartTime!,
+      endTime: now,
+      distanceKm: double.parse(effectiveDistKm.toStringAsFixed(2)),
+      durationSec: durSec,
+      avgSpeedKmh: trip.avgSpeedKmh,
+      maxSpeedKmh: trip.maxSpeedKmh,
+      usedPercent: trip.usedPercent,
+      startOdo: _tripStartOdo,
+      endOdo: state.lastTelemetry?.odo,
+      route: recordedRoute,
+    );
+
+    final updated = [record, ...state.tripHistory].take(50).toList();
+    // Reset bộ đếm chuyến hiện tại ngay sau khi đã lưu để không bị lưu trùng lần 2 khi Tắt máy -> Ngắt BLE
+    final curTele = state.lastTelemetry;
+    _tripStartOdo = curTele?.odo;
+    _tripStartTime = null;
+    _tripStartPercent = curTele?.percent;
+    _tripMaxSpeed = 0.0;
+    _tripSpeedSum = 0.0;
+    _tripSpeedSamples = 0;
+    state = state.copyWith(
+      tripHistory: updated,
+      trip: TripData(powerKw: state.trip.powerKw),
+    );
+
+    try {
+      final prefs = await _prefs;
+      final jsonStr = jsonEncode(updated.map((e) => e.toJson()).toList());
+      await prefs.setString(_kTripHistory, jsonStr);
+      BleLogger.instance.event('trip_archived', {
+        'dist_km': record.distanceKm,
+        'dur_sec': record.durationSec,
+        'avg_speed': record.avgSpeedKmh,
+        'route_points': record.route.length,
+      });
+    } catch (e) {
+      BleLogger.instance.event('trip_archive_error', {'error': '$e'});
     }
   }
 
@@ -606,6 +837,7 @@ class BleController extends Notifier<BleState> {
       state = state.copyWith(
         speedLimitMode: on ? 1 : 0,
         eceMode: on ? 1 : 0,
+        fwSpeedLimitRaw: on ? 1 : 0,
       );
       if (on) {
         return '⚠️ Xe chưa kết nối. Đã lưu tùy chọn giới hạn tốc độ 60 km/h trên ứng dụng.';
@@ -619,6 +851,7 @@ class BleController extends Notifier<BleState> {
     state = state.copyWith(
       speedLimitMode: on ? 1 : 0,
       eceMode: on ? 1 : 0,
+      fwSpeedLimitRaw: on ? 1 : 0,
     );
     if (on) {
       return '⚡ Đã bật Giới hạn tốc độ 60 km/h (ECE + SpeedLimit).\n'
@@ -770,18 +1003,34 @@ class BleController extends Notifier<BleState> {
     final dist =
         await readFwSettingRaw(Gatt.distanceChar, 'khoảng cách tự bật/tắt');
     final chgDec = await readFwSettingRaw(Gatt.chargingProfileChar, 'profile sạc');
+    final vescProgDec = await readFwSettingRaw(Gatt.vescProgrammingChar, 'vesc programming');
     final isLockedVal = await readLockStatus();
+
     final isLimited = (speed.isNotEmpty && speed[0] == 1) && (ece.isNotEmpty && ece[0] == 1);
+    final fwSpeedRaw = speed.isNotEmpty ? speed[0] : null;
+
+    int? distU16;
+    if (dist.length >= 2) {
+      distU16 = ByteData.sublistView(Uint8List.fromList(dist)).getUint16(0, Endian.little);
+    } else if (dist.isNotEmpty) {
+      distU16 = dist[0];
+    }
+
+    final isVescProg = vescProgDec.isNotEmpty && vescProgDec[0] == 0x01;
+
     int? chgProfile;
     if (chgDec.isNotEmpty && chgDec[0] >= 0 && chgDec[0] <= 2) {
       chgProfile = chgDec[0];
     }
     state = state.copyWith(
       speedLimitMode: isLimited ? 1 : 0,
+      fwSpeedLimitRaw: fwSpeedRaw ?? state.fwSpeedLimitRaw,
       eceMode: ece.isNotEmpty && ece[0] == 1 ? 1 : 0,
       grabMode: grab.isNotEmpty && grab[0] == 1 ? 1 : 0,
       idlingTurnOff: idling.isNotEmpty && idling[0] == 1,
       distanceMode: dist.isNotEmpty && dist[0] > 0 ? 1 : 0,
+      distanceRawU16: distU16 ?? state.distanceRawU16,
+      vescProgActive: isVescProg,
       chargingProfile: chgProfile ?? state.chargingProfile,
       isLocked: isLockedVal ?? state.isLocked,
     );
@@ -792,9 +1041,28 @@ class BleController extends Notifier<BleState> {
       'grab': grab.isEmpty ? null : grab[0],
       'idling': idling.isEmpty ? null : idling[0],
       'distance': dist.isEmpty ? null : dist[0],
+      'distance_u16': distU16,
+      'vesc_prog_active': isVescProg,
       'charging_profile': chgProfile,
       'is_locked': isLockedVal,
     });
+  }
+
+  /// Khôi phục cờ VESC Programming (b0ca953d) về 0x00 nếu đang kẹt ở 0x01.
+  Future<String> recoverFromVescProgrammingMode() async {
+    final cur = await readFwSettingRaw(Gatt.vescProgrammingChar, 'check_vesc_prog');
+    if (cur.isEmpty || cur[0] == 0) {
+      state = state.copyWith(vescProgActive: false);
+      return '✅ Cổng VESC đang ở chế độ Normal (0x00) — không cần khôi phục.';
+    }
+    final msg = await _writeSetting(
+      Gatt.vescProgrammingChar,
+      [0x30],
+      'khôi phục VESC Programming về Normal (0x00)',
+    );
+    await refreshFwSettings();
+    BleLogger.instance.event('vesc_programming_recovered', {'val': state.vescProgActive ? 1 : 0});
+    return '🛠️ $msg';
   }
 
   // (ĐÃ GỞ v1.5.2) repairBeepUuid/readBeepUuid — dựa trên kết luận SAI rằng
@@ -813,15 +1081,64 @@ class BleController extends Notifier<BleState> {
   /// Đặt tên xe — ghi THẬT xuống flash xe qua char 88c30d2c (firmware
   /// setName: NVS 'ble-info'/'name', log "Set new name: %s", maxLen 20).
   /// Ghidra-verified 23/10. (Char 460a5bc5 chỉ là echo — KHÔNG lưu.)
-  Future<String> setFwBikeName(String name) {
+  Future<String> setFwBikeName(String name) async {
     final trimmed = name.trim();
     final bytes = utf8.encode(
         trimmed.length > 20 ? trimmed.substring(0, 20) : trimmed);
-    return _writeSetting(Gatt.fwNameChar, bytes, 'tên xe');
+    final res = await _writeSetting(Gatt.fwNameChar, bytes, 'tên xe');
+    final prefs = await _prefs;
+    await prefs.setString(_kLastBikeName, trimmed);
+    state = state.copyWith(bikeName: trimmed);
+    return res;
+  }
+
+  /// Đặt tên xe cục bộ trên ứng dụng khi chưa kết nối Bluetooth
+  Future<void> setLocalBikeName(String name) async {
+    final trimmed = name.trim();
+    final prefs = await _prefs;
+    await prefs.setString(_kLastBikeName, trimmed);
+    state = state.copyWith(bikeName: trimmed);
+  }
+
+  /// Đọc trọn bộ thông tin định danh & snapshot VESC (đã qua _enqueueGatt + cắt Stale-Tail)
+  Future<void> fetchVehicleDiagnostics() async {
+    if (state.phase != BlePhase.connected || _sessionKey == null) return;
+
+    // 1. Model xe (4aae98e9)
+    final modelDec = await readFwSettingRaw(Gatt.bikeModelChar, 'bike_model');
+    final modelStr = modelDec.isEmpty ? null : BleLogger.tryUtf8(modelDec)?.trim();
+
+    // 2. Manifest 3 boards (73d50009)
+    final mfDec = await readFwSettingRaw(Gatt.boardManifestChar, 'board_manifest');
+    final mfStr = mfDec.isEmpty ? null : BleLogger.tryUtf8(mfDec)?.trim();
+
+    // 3. Serial khung xe (041d5a06)
+    await readDeviceSerial();
+
+    // 4. Tên xe lưu trong NVS (88c30d2c)
+    final fwName = await readFwBikeName();
+
+    // 5. VESC Snapshot 12B = 3 x float32 LE (35a9b4f6)
+    double? vI, vV, vDuty;
+    final vescDec = await readFwSettingRaw(Gatt.vescSnapshotChar, 'vesc_snapshot');
+    if (vescDec.length >= 12) {
+      final bd = ByteData.sublistView(vescDec, 0, 12);
+      vI = bd.getFloat32(0, Endian.little);
+      vV = bd.getFloat32(4, Endian.little);
+      vDuty = bd.getFloat32(8, Endian.little);
+    }
+
+    state = state.copyWith(
+      bikeName: (fwName != null && fwName.isNotEmpty) ? fwName : state.bikeName,
+      bikeModelCode: modelStr ?? state.bikeModelCode,
+      boardManifest: mfStr ?? state.boardManifest,
+      vescCurrent: vI ?? state.vescCurrent,
+      vescVoltage: vV ?? state.vescVoltage,
+      vescDutyCycle: vDuty ?? state.vescDutyCycle,
+    );
   }
 
 
-  /// NGHIÊN CỨU GIAO THỨC: đọc quét TOÀN BỘ characteristic đọc được của xe,
   /// log hex + utf8 (và bản decrypt protected nếu có session key) để phân tích
   /// offline — tìm char còi, serial, các giá trị chưa biết. Chạy 1 lần/session,
   /// cách nhau 120ms để không nghẽn GATT.
@@ -1156,42 +1473,78 @@ class BleController extends Notifier<BleState> {
     }
   }
 
+  /// Tìm cổng BẬT/TẮT NGUỒN THẬT (7f13fe5c — Protected Write: '1' = Bật sáng Taplo, '0' = Tắt nguồn).
+  /// Ưu tiên tìm theo UUID 7f13fe5c (Gatt.powerOnOffChar / Gatt.lockBikeChar), fallback sang slot đứng ngay sau 44e2bde6 trong infoService.
+  BluetoothCharacteristic? _findPowerCmdChar() {
+    final direct = _findCharacteristic(Gatt.powerOnOffChar);
+    if (direct != null) return direct;
+    final chars = state.characteristics;
+    for (var i = 0; i + 1 < chars.length; i++) {
+      if (chars[i].uuid.str128.toLowerCase() == Gatt.bikeSerial.toLowerCase()) {
+        final next = chars[i + 1];
+        if (next.serviceUuid.str128.toLowerCase() ==
+                Gatt.infoService.toLowerCase() &&
+            (next.properties.write || next.properties.writeWithoutResponse)) {
+          return next;
+        }
+      }
+    }
+    return null;
+  }
+
   /// Tắt nguồn KHÔNG qua guard tốc độ — chỉ dùng cho luồng chống trộm.
   Future<void> _forceSendPowerOff() async {
-    final dyn = _findDynamicCmdChar();
-    if (dyn != null && _sessionKey != null) {
-      try {
+    final pwrChar = _findPowerCmdChar();
+    if (pwrChar != null && _sessionKey != null) {
+      await _enqueueGatt(() async {
         final frame = BikeSessionCrypto.buildProtectedWrite(
           sessionKey: _sessionKey!,
           counter: _writeCounter++,
-          characteristicUuid: dyn.uuid.str128,
+          characteristicUuid: pwrChar.uuid.str128,
           data: '0'.codeUnits,
         );
-        await dyn.write(frame, withoutResponse: false);
-        BleLogger.instance.event('power_command',
-            {'target': 'dynamicCmdChar', 'val': '0', 'note': 'anti-theft force'});
-        await Future.delayed(const Duration(milliseconds: 250));
-      } catch (e) {
-        BleLogger.instance
-            .event('power_err', {'target': 'dynamicCmdChar', 'error': '$e'});
-      }
-    }
-    final sw = _findCharacteristic(Gatt.powerSwitchChar);
-    if (sw != null) {
-      await sw.write('0'.codeUnits, withoutResponse: false);
-      BleLogger.instance.event('power_command',
-          {'target': 'powerSwitchChar', 'val': '0', 'note': 'anti-theft force'});
+        await pwrChar.write(frame, withoutResponse: false);
+      });
+      BleLogger.instance.event('power_command', {
+        'target': 'powerOnOffChar (7f13fe5c)',
+        'val': '0',
+        'note': 'anti-theft force',
+      });
     }
   }
 
-  /// Walk-up unlock: tự MỞ khóa an toàn khi user tới cực gần (KHÔNG tự bật xe).
-  Future<void> _runWalkUpUnlock(double rssi) async {
-    BleLogger.instance.event('walk_up_unlock_triggered', {'rssi': rssi});
+  /// Walk-up: tự MỞ khóa an toàn & tùy chọn BẬT XE SẴN khi user tới gần
+  Future<void> _runWalkUpUnlockAndPower(double rssi) async {
+    BleLogger.instance.event('walk_up_triggered', {
+      'rssi': rssi,
+      'auto_power': state.walkUpAutoPowerOn,
+      'is_locked': state.isLocked,
+    });
     try {
-      await unlockBike();
-      state = state.copyWith(message: '👋 Đã tự MỞ KHÓA AN TOÀN — sẵn sàng. Bấm BẬT XE để khởi động.');
+      final wasLocked = state.isLocked;
+      if (wasLocked) {
+        await unlockBike();
+      }
+
+      if (state.walkUpAutoPowerOn) {
+        final isBikeOn = state.lastTelemetry?.isBikeOn == true;
+        if (!isBikeOn) {
+          if (wasLocked) {
+            await Future.delayed(const Duration(milliseconds: 300));
+          }
+          await turnOnBike();
+          state = state.copyWith(
+            message: '⚡ Đã tự MỞ KHÓA & BẬT XE SẴN — Sẵn sàng khởi hành!',
+          );
+          return;
+        }
+      }
+
+      state = state.copyWith(
+        message: '👋 Đã tự MỞ KHÓA AN TOÀN — sẵn sàng. Bấm BẬT XE để khởi động.',
+      );
     } catch (e) {
-      BleLogger.instance.event('walk_up_unlock_err', {'error': '$e'});
+      BleLogger.instance.event('walk_up_err', {'error': '$e'});
     }
   }
 
@@ -1205,6 +1558,40 @@ class BleController extends Notifier<BleState> {
     final prefs = await _prefs;
     await prefs.setBool(_kWalkUpUnlock, val);
     state = state.copyWith(walkUpUnlock: val);
+  }
+
+  /// Bật/tắt tính năng phụ: Tự động khởi động nguồn xe sẵn khi bước lại gần
+  Future<void> setWalkUpAutoPowerOn(bool val) async {
+    final prefs = await _prefs;
+    await prefs.setBool(_kWalkUpAutoPowerOn, val);
+    state = state.copyWith(walkUpAutoPowerOn: val);
+    BleLogger.instance.event('walk_up_auto_power_changed', {'enabled': val});
+  }
+
+  /// Tùy chỉnh mức sóng RSSI kích hoạt khi đến gần (-45.0 .. -72.0 dBm)
+  Future<void> setWalkUpRssiThreshold(double val) async {
+    final prefs = await _prefs;
+    await prefs.setDouble(_kWalkUpRssiThreshold, val);
+    state = state.copyWith(walkUpRssiThreshold: val);
+    BleLogger.instance.event('walk_up_rssi_threshold_changed', {'threshold': val});
+  }
+
+  /// Tùy chỉnh mức sóng RSSI kích hoạt khi rời xa (-68.0 .. -95.0 dBm)
+  Future<void> setAutoLockRssiThreshold(double val) async {
+    final prefs = await _prefs;
+    await prefs.setDouble(_kAutoLockRssiThreshold, val);
+    int distIndex = 1;
+    if (val >= -78.0) {
+      distIndex = 0;
+    } else if (val <= -88.0) {
+      distIndex = 2;
+    }
+    await prefs.setInt(_kAutoLockDistance, distIndex);
+    state = state.copyWith(
+      autoLockRssiThreshold: val,
+      autoLockDistance: distIndex,
+    );
+    BleLogger.instance.event('auto_lock_rssi_threshold_changed', {'threshold': val});
   }
 
   Future<void> setAntiTheft5m(bool val) async {
@@ -1222,7 +1609,13 @@ class BleController extends Notifier<BleState> {
   Future<void> setAutoLockDistance(int val) async {
     final prefs = await _prefs;
     await prefs.setInt(_kAutoLockDistance, val);
-    state = state.copyWith(autoLockDistance: val);
+    const lockThresholds = [-75.0, -83.0, -90.0];
+    final rssi = lockThresholds[val.clamp(0, 2)];
+    await prefs.setDouble(_kAutoLockRssiThreshold, rssi);
+    state = state.copyWith(
+      autoLockDistance: val,
+      autoLockRssiThreshold: rssi,
+    );
   }
 
   Future<void> setAntiForgetDistance(int val) async {
@@ -1231,7 +1624,9 @@ class BleController extends Notifier<BleState> {
     state = state.copyWith(antiForgetDistance: val);
   }
 
-  void resetTrip() {
+  Future<void> resetTrip() async {
+    await _archiveCurrentTripIfMeaningful();
+    TripGpsTracker.instance.clear();
     _tripStartOdo = state.lastTelemetry?.odo;
     _tripStartTime = DateTime.now();
     _tripStartPercent = state.lastTelemetry?.percent;
@@ -1561,6 +1956,10 @@ class BleController extends Notifier<BleState> {
     _pollTimer = Timer.periodic(
         Duration(milliseconds: Gatt.dashboardPollMs), (_) => _pollDashboard());
     await _pollDashboard(); // đọc ngay 1 lần
+    if (state.isAuthorized) {
+      unawaited(refreshFwSettings());
+      unawaited(fetchVehicleDiagnostics());
+    }
     return state.isAuthorized;
   }
 
@@ -1641,10 +2040,13 @@ class BleController extends Notifier<BleState> {
       _theftCounter = 0;
     }
 
-    // (a) AUTO-SECURE rời xa: RSSI ≤ -85dBm bền 3 chu kỳ (~3s) + xe BẬT +
+    // (a) AUTO-SECURE rời xa: RSSI ≤ ngưỡng cài đặt bền 3 chu kỳ (~3s) + xe BẬT +
     //     ĐỨNG YÊN → tắt xe → đợi 2s → BẬT khóa an toàn.
     if (state.autoLockWalkAway && autoAllowed && isBikeOn && speed <= 0.5) {
-      if (rssi <= -85) {
+      const lockThresholds = [-75.0, -83.0, -90.0];
+      final targetThreshold = state.autoLockRssiThreshold ??
+          lockThresholds[state.autoLockDistance.clamp(0, 2)];
+      if (rssi <= targetThreshold) {
         _autoLockCounter++;
         if (_autoLockCounter >= 3) {
           _autoLockCounter = 0;
@@ -1657,14 +2059,19 @@ class BleController extends Notifier<BleState> {
       _autoLockCounter = 0;
     }
 
-    // (b) WALK-UP UNLOCK: xe đang KHÓA + RSSI ≥ -55dBm (~1-2m) bền 2 chu kỳ
-    //     → tự MỞ khóa an toàn (KHÔNG tự bật xe).
-    if (state.walkUpUnlock && autoAllowed && state.isLocked) {
-      if (rssi >= -55) {
-        _unlockNearCounter++;
-        if (_unlockNearCounter >= 2) {
+    // (b) WALK-UP UNLOCK & BẬT XE SẴN KHI TỚI GẦN
+    if (state.walkUpUnlock && autoAllowed) {
+      final nearThreshold = state.walkUpRssiThreshold ?? -55.0;
+      final needsAction = state.isLocked || (state.walkUpAutoPowerOn && !isBikeOn);
+      if (needsAction) {
+        if (rssi >= nearThreshold) {
+          _unlockNearCounter++;
+          if (_unlockNearCounter >= 2) {
+            _unlockNearCounter = 0;
+            unawaited(_runWalkUpUnlockAndPower(rssi));
+          }
+        } else {
           _unlockNearCounter = 0;
-          unawaited(_runWalkUpUnlock(rssi));
         }
       } else {
         _unlockNearCounter = 0;
@@ -1673,17 +2080,22 @@ class BleController extends Notifier<BleState> {
       _unlockNearCounter = 0;
     }
 
-    // 2. Walk-Up Proximity: Khi bước lại gần (> -65 dBm) -> thông báo sẵn sàng
-    if (_smoothedRssi! > -65.0) {
+    // 2. Walk-Up Proximity: Khi bước lại gần -> thông báo sẵn sàng
+    final proximityNoticeThreshold = (state.walkUpRssiThreshold != null)
+        ? (state.walkUpRssiThreshold! - 8.0)
+        : -65.0;
+    if (_smoothedRssi! > proximityNoticeThreshold) {
       if (!_walkUpTriggered) {
         _walkUpTriggered = true;
         BleLogger.instance.event('walk_up_ready', {'rssi': _smoothedRssi});
         state = state.copyWith(
-          message: '👋 Đã lại gần xe! Sẵn sàng vận hành.',
+          message: state.walkUpAutoPowerOn
+              ? '👋 Đã lại gần xe! Đang tự động sẵn sàng khởi hành.'
+              : '👋 Đã lại gần xe! Sẵn sàng vận hành.',
         );
       }
-    } else if (_smoothedRssi! < -75.0) {
-      // Tái vũ trang cờ khi đã rời xa hơn -75 dBm
+    } else if (_smoothedRssi! < ((state.autoLockRssiThreshold ?? -83.0) + 5.0)) {
+      // Tái vũ trang cờ khi đã rời xa
       _walkUpTriggered = false;
     }
 
@@ -1860,9 +2272,35 @@ class BleController extends Notifier<BleState> {
       if (state.dashboardEncrypted) {
         state = state.copyWith(dashboardEncrypted: false);
       }
+
+      if (payloadToDecode.length >= 41) {
+        final b12 = payloadToDecode[12];
+        final bd = ByteData.sublistView(payloadToDecode);
+        final b13_14 = bd.getUint16(13, Endian.little);
+        final b32 = payloadToDecode[32];
+        final sig = '$b12:$b13_14:$b32';
+        if (sig != _lastRawStatusSig) {
+          _lastRawStatusSig = sig;
+          BleLogger.instance.event('dashboard_raw_status_bytes', {
+            'byte12': b12,
+            'byte13_14': b13_14,
+            'byte32': b32,
+            'mode': msg.drivingModeLabel,
+            'parking': msg.parking,
+            'speed': msg.speed,
+          });
+        }
+      }
+
       dk = 'st=${msg.state.name} sp=${msg.speed} odo=${msg.odo} '
           'km=${msg.kmLeft} ecu=${msg.ecu} mot=${msg.motor} '
           'fw=${msg.version} model=${msg.model}';
+
+      // Cập nhật GPS tracker & vận tốc xe
+      TripGpsTracker.instance.updateBikeSpeed(msg.speed);
+      if (!TripGpsTracker.instance.isTracking && (msg.speed > 0.5 || state.phase == BlePhase.connected)) {
+        unawaited(TripGpsTracker.instance.startTracking());
+      }
 
       // Cập nhật máy tính chuyến đi (Trip Computer) & Công suất tức thời
       _tripStartTime ??= DateTime.now();
@@ -2000,12 +2438,12 @@ class BleController extends Notifier<BleState> {
     }
   }
 
-  /// Chờ tối thiểu 800ms kể từ lần gửi lệnh trước để bảo đảm MCU và CAN bus
+  /// Chờ tối thiểu 300ms kể từ lần gửi lệnh trước để bảo đảm MCU và CAN bus
   /// truyền tin cậy tới BMS, không bị nghẽn mailbox hoặc rớt gói tin BMS.
   Future<void> _throttleCommand() async {
     if (_lastCommandCompletedAt != null) {
       final elapsed = DateTime.now().difference(_lastCommandCompletedAt!);
-      const minInterval = Duration(milliseconds: 800);
+      const minInterval = Duration(milliseconds: 300);
       if (elapsed < minInterval) {
         final waitMs = minInterval.inMilliseconds - elapsed.inMilliseconds;
         BleLogger.instance.event('cmd_throttle_wait', {'wait_ms': waitMs});
@@ -2061,6 +2499,7 @@ class BleController extends Notifier<BleState> {
     _isCommandBusy = true;
     try {
       await _sendPowerCommand('0', 'TẮT XE');
+      unawaited(_archiveCurrentTripIfMeaningful());
     } finally {
       _isCommandBusy = false;
       _lastCommandCompletedAt = DateTime.now();
@@ -2068,7 +2507,7 @@ class BleController extends Notifier<BleState> {
   }
 
   Future<void> _sendPowerCommand(String value, String label) async {
-    if (!state.isAuthorized) {
+    if (!state.isAuthorized || _sessionKey == null) {
       state = state.copyWith(
           message: 'Chưa xác thực phiên — xe sẽ bỏ qua lệnh $label');
       BleLogger.instance.event('power_blocked', {
@@ -2092,62 +2531,49 @@ class BleController extends Notifier<BleState> {
       throw Exception(warn);
     }
 
-    bool sent = false;
+    final pwrChar = _findPowerCmdChar();
+    if (pwrChar == null) {
+      throw Exception('Không tìm thấy cổng điều khiển nguồn xe (7f13fe5c)');
+    }
+
     await _enqueueGatt(() async {
-      // Bước 0 theo capture app gốc: protected write lên char lệnh ĐỘNG (slot
-      // sau bikeSerial, UUID xoay mỗi phiên) TRƯỚC khi bật/tắt.
-      if (_sessionKey != null) {
-        final dyn = _findDynamicCmdChar();
-        if (dyn != null) {
-          try {
-            final frame = BikeSessionCrypto.buildProtectedWrite(
-              sessionKey: _sessionKey!,
-              counter: _writeCounter++,
-              characteristicUuid: dyn.uuid.str128,
-              data: value.codeUnits,
-            );
-            await dyn.write(frame, withoutResponse: false);
-            BleLogger.instance.event('power_command', {
-              'target': 'dynamicCmdChar',
-              'uuid': dyn.uuid.str128,
-              'val': value,
-              'counter': _writeCounter - 1,
-            });
-            sent = true;
-            // Delay 250ms giữa các packet liên tiếp để CAN bus tới BMS nhận đúng tín hiệu
-            await Future.delayed(const Duration(milliseconds: 250));
-          } catch (e) {
-            BleLogger.instance.event('power_err',
-                {'target': 'dynamicCmdChar', 'error': '$e'});
-          }
-        }
-      }
-      for (final c in state.characteristics) {
-        final uuid = c.uuid.str128.toLowerCase();
-        // 1. Plain write '1'/'0' vào POWER_SWITCH_CHAR (350d9a82 — Write #11
-        //    handle 0x0038 trong capture, sau khi session đã establish)
-        if (uuid == Gatt.powerSwitchChar.toLowerCase()) {
-          try {
-            await c.write(value.codeUnits, withoutResponse: false);
-            BleLogger.instance.event('power_command', {'target': 'powerSwitchChar', 'val': value});
-            sent = true;
-            // Delay 250ms để MCU hoàn tất xử lý trước khi nhận protected write tiếp theo
-            await Future.delayed(const Duration(milliseconds: 250));
-          } catch (e) {
-            BleLogger.instance.event('power_err', {'target': 'powerSwitchChar', 'error': '$e'});
-          }
-        }
+      final frame = BikeSessionCrypto.buildProtectedWrite(
+        sessionKey: _sessionKey!,
+        counter: _writeCounter++,
+        characteristicUuid: pwrChar.uuid.str128,
+        data: value.codeUnits,
+      );
+      await pwrChar.write(frame, withoutResponse: false);
+      BleLogger.instance.event('power_command', {
+        'target': 'powerOnOffChar (7f13fe5c)',
+        'uuid': pwrChar.uuid.str128,
+        'val': value,
+        'counter': _writeCounter - 1,
+      });
+    });
+
+    // Cập nhật Optimistic UI ngay lập tức để nút Bật/Tắt phản hồi tức thì (<150ms)
+    final curTele = state.lastTelemetry;
+    if (curTele != null) {
+      curTele.state = (value == '1') ? BikeState.parking : BikeState.off;
+    }
+    state = state.copyWith(
+      lastTelemetry: curTele,
+      message: 'Đã gửi lệnh $label',
+    );
+
+    // Kích hoạt đọc lại Dashboard sau 150ms để đồng bộ trạng thái thật từ MCU
+    Future.delayed(const Duration(milliseconds: 150), () {
+      if (state.phase == BlePhase.connected) {
+        unawaited(_pollDashboard());
       }
     });
-    if (sent) {
-      state = state.copyWith(message: 'Đã gửi lệnh $label');
-    } else {
-      throw Exception('Không tìm thấy cổng điều khiển nguồn xe');
-    }
   }
 
   Future<void> disconnect() async {
     _manualDisconnect = true;
+    await _archiveCurrentTripIfMeaningful();
+    TripGpsTracker.instance.stopTracking();
     _cancelReconnect();
     _stopKeepalive();
     _findBikeTimeoutTimer?.cancel();
@@ -2155,6 +2581,7 @@ class BleController extends Notifier<BleState> {
     _findBikePeriodicTimer?.cancel();
     _findBikePeriodicTimer = null;
     _sessionKey = null;
+    _lastRawStatusSig = null;
     await _connSub?.cancel();
     _connSub = null;
     await _notifySub?.cancel();
@@ -2459,24 +2886,6 @@ class BleController extends Notifier<BleState> {
     }
   }
 
-  /// Char lệnh ĐỘNG: char đứng ngay sau bikeSerial (44e2bde6) trong info
-  /// service — UUID XOAY theo phiên (14/10: ec97fdf9-0e16-cf8c…, 20/10:
-  /// 7f13fe5c-…-97fd-f90e16cf8c28 — cùng đuôi '0e16cf8c28'). Capture app
-  /// gốc ghi protected '0' lên char này TRƯỚC khi bật xe.
-  BluetoothCharacteristic? _findDynamicCmdChar() {
-    final chars = state.characteristics;
-    for (var i = 0; i + 1 < chars.length; i++) {
-      if (chars[i].uuid.str128.toLowerCase() == Gatt.bikeSerial.toLowerCase()) {
-        final next = chars[i + 1];
-        if (next.serviceUuid.str128.toLowerCase() ==
-                Gatt.infoService.toLowerCase() &&
-            (next.properties.write || next.properties.writeWithoutResponse)) {
-          return next;
-        }
-      }
-    }
-    return null;
-  }
 
   Uint8List _sessionKeyOf(String token, String pw, Uint8List salt) =>
       BikeSessionCrypto.deriveSessionKey(
@@ -2891,6 +3300,8 @@ class BleController extends Notifier<BleState> {
         );
 
         BleLogger.instance.event('auto_handshake_success');
+        unawaited(refreshFwSettings());
+        unawaited(fetchVehicleDiagnostics());
         return true;
       } else {
         _sessionKey = null;
@@ -3028,6 +3439,7 @@ class BleController extends Notifier<BleState> {
         _walkUpTriggered = false;
         _batteryChar = null;
         _batteryPollCounter = 0;
+        unawaited(_archiveCurrentTripIfMeaningful());
 
         if (_manualDisconnect) {
           // Recovery-disconnect không đóng logger (log giữa chừng phải còn

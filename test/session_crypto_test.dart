@@ -1,4 +1,4 @@
-// Test session crypto — vector sinh bằng Python hmac/hashlib chuẩn
+﻿// Test session crypto — vector sinh bằng Python hmac/hashlib chuẩn
 // (đối chiếu chéo để chắc Dart khớp byte-for-byte với triển khai JS đã RE).
 
 import 'dart:typed_data';

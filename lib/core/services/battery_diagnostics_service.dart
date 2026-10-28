@@ -54,7 +54,9 @@ class ThermalZone {
     required double criticalTemp,
   }) {
     final ThermalStatus status;
-    if (temp <= 35) {
+    if (temp <= 0) {
+      status = ThermalStatus.cool;
+    } else if (temp <= 35) {
       status = ThermalStatus.cool;
     } else if (temp < warningTemp - 10) {
       status = ThermalStatus.normal;
@@ -117,6 +119,7 @@ class BatteryHealthReport {
   final ThermalZone bmsThermal;
   final List<ObdDiagnosticItem> obdItems;
   final int safetyScore; // 0-100
+  final bool hasLiveTelemetry;
   final bool isSimulated;
   final String packConfigName;
   final int rawErrorCode;
@@ -142,6 +145,7 @@ class BatteryHealthReport {
     required this.bmsThermal,
     required this.obdItems,
     required this.safetyScore,
+    this.hasLiveTelemetry = false,
     this.isSimulated = false,
     this.packConfigName = 'Đang chờ BMS...',
     this.rawErrorCode = 0,
@@ -156,6 +160,7 @@ class BatteryDiagnosticsService {
     BatteryLogMsg? battery,
     String? modelName,
   }) {
+    final bool hasLiveTelemetry = (telemetry != null && telemetry.voltage > 0) || battery != null;
     final packVoltage = battery?.voltage ?? telemetry?.voltage ?? 0.0;
     final currentAmp = battery?.current ?? telemetry?.phase ?? 0.0;
 
@@ -234,40 +239,42 @@ class BatteryDiagnosticsService {
 
     // Ước lượng SOH (State of Health)
     final cycles = battery?.socCycles.round() ?? (telemetry != null ? (telemetry.odo / 150.0).round() : 0);
-    int health = 100 - (cycles * 0.03).round();
-    if (deltaMv > 80) health -= 5;
-    if (deltaMv > 120) health -= 10;
-    health = health.clamp(60, 100);
+    int health = hasLiveTelemetry ? (100 - (cycles * 0.03).round()) : 100;
+    if (hasLiveTelemetry) {
+      if (deltaMv > 80) health -= 5;
+      if (deltaMv > 120) health -= 10;
+      health = health.clamp(60, 100);
+    }
 
-    // Bản đồ nhiệt 3 điểm
+    // Bản đồ nhiệt 3 điểm: Khi offline trả về 0.0, không bịa nhiệt độ
     final motorZone = ThermalZone.evaluate(
       name: 'Động cơ (Motor)',
-      temp: telemetry?.motor ?? 32.0,
+      temp: telemetry?.motor ?? (hasLiveTelemetry ? 32.0 : 0.0),
       warningTemp: 75.0,
       criticalTemp: 90.0,
     );
 
     final ecuZone = ThermalZone.evaluate(
       name: 'Biến tần (ECU)',
-      temp: telemetry?.ecu ?? 30.0,
+      temp: telemetry?.ecu ?? (hasLiveTelemetry ? 30.0 : 0.0),
       warningTemp: 65.0,
       criticalTemp: 80.0,
     );
 
     final bmsZone = ThermalZone.evaluate(
       name: 'Khối Pin (BMS)',
-      temp: telemetry?.bmsTemp ?? (battery?.ntcs.isNotEmpty == true ? battery!.ntcs.first : 29.0),
+      temp: telemetry?.bmsTemp ?? (battery?.ntcs.isNotEmpty == true ? battery!.ntcs.first : (hasLiveTelemetry ? 29.0 : 0.0)),
       warningTemp: 48.0,
       criticalTemp: 58.0,
     );
 
     // Quét & Giải mã mã lỗi hệ thống OBD theo chuẩn VESC Fault Code
     final errorCode = telemetry?.error ?? 0;
-    final obdItems = _evaluateObdSystems(errorCode, telemetry, battery, packVoltage);
+    final obdItems = _evaluateObdSystems(errorCode, telemetry, battery, packVoltage, hasLiveTelemetry);
 
     // Điểm an toàn vận hành
     final activeErrors = obdItems.where((item) => !item.isHealthy).length;
-    final safetyScore = max(0, 100 - (activeErrors * 25));
+    final safetyScore = hasLiveTelemetry ? max(0, 100 - (activeErrors * 25)) : 0;
 
     return BatteryHealthReport(
       cellVoltages: cells,
@@ -284,12 +291,13 @@ class BatteryDiagnosticsService {
       currentAmp: currentAmp,
       isBalancing: (battery?.balancing ?? 0) != 0,
       chargeCycles: cycles,
-      internalResistanceMo: battery?.resistor ?? 18.5,
+      internalResistanceMo: battery?.resistor ?? (hasLiveTelemetry ? 18.5 : 0.0),
       motorThermal: motorZone,
       ecuThermal: ecuZone,
       bmsThermal: bmsZone,
       obdItems: obdItems,
       safetyScore: safetyScore,
+      hasLiveTelemetry: hasLiveTelemetry,
       isSimulated: isSimulated,
       packConfigName: packConfig,
       rawErrorCode: errorCode,
@@ -302,7 +310,84 @@ class BatteryDiagnosticsService {
     BikeLogMsg? telemetry,
     BatteryLogMsg? battery,
     double packVoltage,
+    bool hasLiveTelemetry,
   ) {
+    if (!hasLiveTelemetry) {
+      return const [
+        ObdDiagnosticItem(
+          id: 1,
+          name: 'IC Lái Cổng Công Suất (DRV)',
+          code: 'VESC-FAULT-03',
+          isHealthy: true,
+          severity: 'Chờ kết nối',
+          description: 'Chưa kết nối xe — Đang chờ dữ liệu Telemetry.',
+          recommendation: 'Kết nối Bluetooth với xe để chẩn đoán mạch lái MOSFET.',
+        ),
+        ObdDiagnosticItem(
+          id: 2,
+          name: 'Bảo Vệ Quá Dòng (Over-Current)',
+          code: 'VESC-FAULT-04',
+          isHealthy: true,
+          severity: 'Chờ kết nối',
+          description: 'Chưa kết nối xe — Đang chờ dữ liệu Telemetry.',
+          recommendation: 'Kết nối Bluetooth với xe để chẩn đoán dòng tải biến tần.',
+        ),
+        ObdDiagnosticItem(
+          id: 3,
+          name: 'Nhiệt Độ Biến Tần ECU',
+          code: 'VESC-TEMP-FET',
+          isHealthy: true,
+          severity: 'Chờ kết nối',
+          description: 'Chưa kết nối xe — Đang chờ dữ liệu Telemetry.',
+          recommendation: 'Kết nối Bluetooth với xe để giám sát nhiệt độ ECU.',
+        ),
+        ObdDiagnosticItem(
+          id: 4,
+          name: 'Nhiệt Độ Động Cơ (Motor)',
+          code: 'VESC-TEMP-MOT',
+          isHealthy: true,
+          severity: 'Chờ kết nối',
+          description: 'Chưa kết nối xe — Đang chờ dữ liệu Telemetry.',
+          recommendation: 'Kết nối Bluetooth với xe để giám sát nhiệt độ motor.',
+        ),
+        ObdDiagnosticItem(
+          id: 5,
+          name: 'Điện Áp Thấp / Cạn Bình (Under-Voltage)',
+          code: 'VESC-FAULT-02',
+          isHealthy: true,
+          severity: 'Chờ kết nối',
+          description: 'Chưa kết nối xe — Đang chờ dữ liệu Telemetry.',
+          recommendation: 'Kết nối Bluetooth với xe để đo điện áp pack pin.',
+        ),
+        ObdDiagnosticItem(
+          id: 6,
+          name: 'Điện Áp Cao Bất Thường (Over-Voltage)',
+          code: 'VESC-FAULT-01',
+          isHealthy: true,
+          severity: 'Chờ kết nối',
+          description: 'Chưa kết nối xe — Đang chờ dữ liệu Telemetry.',
+          recommendation: 'Kết nối Bluetooth với xe để kiểm tra điện áp bus sạc/recup.',
+        ),
+        ObdDiagnosticItem(
+          id: 7,
+          name: 'Cảm Biến Vị Trí Góc Quay / Encoder',
+          code: 'VESC-FAULT-ENC',
+          isHealthy: true,
+          severity: 'Chờ kết nối',
+          description: 'Chưa kết nối xe — Đang chờ dữ liệu Telemetry.',
+          recommendation: 'Kết nối Bluetooth với xe để kiểm tra tín hiệu encoder rotor.',
+        ),
+        ObdDiagnosticItem(
+          id: 8,
+          name: 'Cảm Biến Nhiệt Pack Pin (BMS NTC)',
+          code: 'BMS-TEMP-NTC',
+          isHealthy: true,
+          severity: 'Chờ kết nối',
+          description: 'Chưa kết nối xe — Đang chờ dữ liệu Telemetry.',
+          recommendation: 'Kết nối Bluetooth với xe để giám sát cảm biến nhiệt cell pin.',
+        ),
+      ];
+    }
     // VESC mc_fault_code enumeration:
     // 0: FAULT_CODE_NONE
     // 1: FAULT_CODE_OVER_VOLTAGE

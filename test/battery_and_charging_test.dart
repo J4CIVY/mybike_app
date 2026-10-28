@@ -1,4 +1,4 @@
-import 'package:flutter_test/flutter_test.dart';
+﻿import 'package:flutter_test/flutter_test.dart';
 import 'package:mybike_app/core/proto/bike_log.dart';
 import 'package:mybike_app/core/services/battery_diagnostics_service.dart';
 import 'package:mybike_app/core/services/charging_router_service.dart';
@@ -18,6 +18,22 @@ void main() {
       expect(report.balanceGrade, CellBalanceGrade.unknown);
       expect(report.deltaVoltageMv, 0.0);
       expect(report.packConfigName, 'Đang chờ BMS...');
+    });
+
+    test('Offline without telemetry or battery reports hasLiveTelemetry false and OBD waiting', () {
+      final report = BatteryDiagnosticsService.analyze(
+        telemetry: null,
+        battery: null,
+      );
+
+      expect(report.hasLiveTelemetry, isFalse);
+      expect(report.safetyScore, 0);
+      expect(report.motorThermal.temperature, 0.0);
+      expect(report.ecuThermal.temperature, 0.0);
+      expect(report.bmsThermal.temperature, 0.0);
+      expect(report.internalResistanceMo, 0.0);
+      expect(report.obdItems.length, 8);
+      expect(report.obdItems.every((item) => item.severity == 'Chờ kết nối'), isTrue);
     });
 
     test('Real BMS telemetry with 23 cells returns exact cell count and real balance', () {

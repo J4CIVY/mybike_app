@@ -12,9 +12,12 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/ble/ble_controller.dart';
 import '../../core/proto/bike_log.dart';
+import '../../core/services/trip_gps_tracker.dart';
+import '../home/trip_route_screen.dart';
 import '../../ui/app_theme.dart';
 import '../../ui/gauge.dart';
 import '../../ui/widgets.dart';
+import 'widgets/cockpit_live_map.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -210,22 +213,48 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final trip = ble.trip;
     final isEncrypted = ble.dashboardEncrypted;
 
-    // Tính công suất tức thời kW
+    // Tính công suất tức thời kW: phase < 0 là XẢ (DRAW), phase > 0 là PHANH TÁI SINH (RECUP)
     final powerKw = (m.voltage > 0) ? ((m.voltage * m.phase) / 1000.0) : 0.0;
-    final isRecup = powerKw < -0.05; // Đang phanh tái sinh nạp ngược pin
-    final isDraw = powerKw > 0.05; // Đang xả điện tăng tốc
+    final isDraw = powerKw < -0.05; // Đang xả điện chạy động cơ
+    final isRecup = powerKw > 0.05; // Đang phanh tái sinh nạp ngược pin
 
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
-        title: Text(
-          (ble.bikeName ?? 'Dat Bike EV').toUpperCase(),
-          style: GoogleFonts.spaceGrotesk(
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-            letterSpacing: 0.5,
-            color: AppColors.textPrimary,
-          ),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: const [
+                  BoxShadow(color: Color(0x180F172A), blurRadius: 4, offset: Offset(0, 1)),
+                ],
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Image.asset(
+                'assets/images/bike_logo_3d.png',
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => const Icon(Icons.two_wheeler_rounded, color: AppColors.primary, size: 20),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                (ble.bikeName ?? 'Dat Bike EV').toUpperCase(),
+                style: GoogleFonts.spaceGrotesk(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                  letterSpacing: 0.5,
+                  color: AppColors.textPrimary,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
         ),
         actions: [
           IconButton(
@@ -358,12 +387,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         _buildSpeedGaugeCard(m, powerKw, isRecup, isDraw),
         const SizedBox(height: 12),
 
-        // 4. Tab switcher: Chuyến đi / Sức khỏe & Mã lỗi
+        // 4. Tab switcher: Chuyến đi & Bản đồ / Sức khỏe OBD
         _buildTabSwitcher(),
         const SizedBox(height: 12),
 
         // 5. Nội dung theo tab
-        if (_activeTab == 0) _buildTripPanel(trip) else _buildDiagnosticsPanel(m),
+        if (_activeTab == 0)
+          _buildTripPanel(trip, m)
+        else
+          _buildDiagnosticsPanel(m),
         const SizedBox(height: 12),
 
         // 6. Thông tin phần cứng & dòng tải
@@ -459,7 +491,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               const SizedBox(height: 10),
               _buildTabSwitcher(),
               const SizedBox(height: 10),
-              if (_activeTab == 0) _buildTripPanel(trip) else _buildDiagnosticsPanel(m),
+              if (_activeTab == 0)
+                _buildTripPanel(trip, m)
+              else
+                _buildDiagnosticsPanel(m),
               const SizedBox(height: 10),
               _buildHardwareInfo(m),
               const SizedBox(height: 12),
@@ -727,9 +762,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(width: 5),
           Text(
             isRecup
-                ? '${powerKw.toStringAsFixed(2)} kW RECUP'
+                ? '+${powerKw.toStringAsFixed(2)} kW RECUP'
                 : isDraw
-                    ? '+${powerKw.toStringAsFixed(2)} kW'
+                    ? '${powerKw.abs().toStringAsFixed(2)} kW'
                     : '0.00 kW',
             style: GoogleFonts.spaceGrotesk(
               fontSize: 11.5,
@@ -811,194 +846,198 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
+  void _openFullScreenMap(TripData trip) {
+    final curTrip = TripRecord(
+      startTime: trip.duration.inSeconds > 0
+          ? DateTime.now().subtract(trip.duration)
+          : DateTime.now(),
+      endTime: DateTime.now(),
+      distanceKm: trip.distanceKm,
+      durationSec: trip.duration.inSeconds,
+      avgSpeedKmh: trip.avgSpeedKmh,
+      maxSpeedKmh: trip.maxSpeedKmh,
+      usedPercent: trip.usedPercent,
+      route: TripGpsTracker.instance.getCurrentRoute(),
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TripRouteScreen(
+          trip: curTrip,
+          tripIndex: 0,
+          allTrips: ref.read(bleProvider).tripHistory,
+        ),
+      ),
+    );
+  }
+
   Widget _buildTabSwitcher() {
     return Row(
       children: [
+        // Tab 0: CHUYẾN ĐI (TRIP A) & BẢN ĐỒ LIVE
         Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(9999),
-            onTap: () => setState(() => _activeTab = 0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
-              decoration: BoxDecoration(
-                color: _activeTab == 0 ? const Color(0xFFF0F9FF) : AppColors.panel,
-                borderRadius: BorderRadius.circular(9999),
-                border: Border.all(
-                  color: _activeTab == 0 ? AppColors.secondary : AppColors.panelBorder,
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_activeTab == 0) ...[
-                    Container(
-                      width: 6,
-                      height: 6,
-                      margin: const EdgeInsets.only(right: 5),
-                      decoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'CHUYẾN ĐI (TRIP A)',
-                        maxLines: 1,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: _activeTab == 0 ? AppColors.primary : AppColors.textDim,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          child: _tabButton(
+            index: 0,
+            icon: Icons.route_rounded,
+            label: 'CHUYẾN ĐI (TRIP A)',
           ),
         ),
         const SizedBox(width: 8),
+        // Tab 1: SỨC KHỎE & MÃ LỖI
         Expanded(
-          child: InkWell(
-            borderRadius: BorderRadius.circular(9999),
-            onTap: () => setState(() => _activeTab = 1),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 6),
-              decoration: BoxDecoration(
-                color: _activeTab == 1 ? const Color(0xFFF0F9FF) : AppColors.panel,
-                borderRadius: BorderRadius.circular(9999),
-                border: Border.all(
-                  color: _activeTab == 1 ? AppColors.secondary : AppColors.panelBorder,
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_activeTab == 1) ...[
-                    Container(
-                      width: 6,
-                      height: 6,
-                      margin: const EdgeInsets.only(right: 5),
-                      decoration: const BoxDecoration(
-                        color: AppColors.primary,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ],
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(
-                        'SỨC KHỎE & MÃ LỖI',
-                        maxLines: 1,
-                        style: GoogleFonts.plusJakartaSans(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: _activeTab == 1 ? AppColors.primary : AppColors.textDim,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+          child: _tabButton(
+            index: 1,
+            icon: Icons.health_and_safety_rounded,
+            label: 'SỨC KHỎE & MÃ LỖI',
           ),
         ),
       ],
     );
   }
 
-  Widget _buildTripPanel(TripData trip) {
-    return Panel(
-      padding: const EdgeInsets.all(14),
-      borderRadius: 20,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.timer_outlined, size: 18, color: AppColors.primary),
-              const SizedBox(width: 8),
-              Expanded(
+  Widget _tabButton({
+    required int index,
+    required IconData icon,
+    required String label,
+  }) {
+    final isSelected = _activeTab == index;
+    return InkWell(
+      borderRadius: BorderRadius.circular(9999),
+      onTap: () => setState(() => _activeTab = index),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFFF0F9FF) : AppColors.panel,
+          borderRadius: BorderRadius.circular(9999),
+          border: Border.all(
+            color: isSelected ? AppColors.secondary : AppColors.panelBorder,
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: isSelected ? AppColors.primary : AppColors.textDim,
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
                 child: Text(
-                  'THỐNG KÊ CHUYẾN ĐI',
+                  label,
                   maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
+                    fontSize: 10.5,
                     fontWeight: FontWeight.w700,
-                    letterSpacing: 0.05 * 12,
-                    color: AppColors.textDim,
+                    color: isSelected ? AppColors.primary : AppColors.textDim,
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              Text(
-                _formatDuration(trip.duration),
-                style: GoogleFonts.spaceGrotesk(
-                  fontWeight: FontWeight.w700,
-                  fontSize: 15,
-                  color: AppColors.primary,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: MetricTile(
-                  icon: Icons.navigation_rounded,
-                  label: 'QUÃNG ĐƯỜNG',
-                  value: trip.distanceKm.toStringAsFixed(2),
-                  unit: 'km',
-                  valueColor: AppColors.primary,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: MetricTile(
-                  icon: Icons.speed_rounded,
-                  label: 'VẬN TỐC MAX',
-                  value: trip.maxSpeedKmh.toStringAsFixed(1),
-                  unit: 'km/h',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: MetricTile(
-                  icon: Icons.timeline_rounded,
-                  label: 'VẬN TỐC TB',
-                  value: trip.avgSpeedKmh.toStringAsFixed(1),
-                  unit: 'km/h',
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: MetricTile(
-                  icon: Icons.battery_alert_rounded,
-                  label: 'TIÊU HAO PIN',
-                  value: '-${trip.usedPercent}',
-                  unit: '% pin',
-                  valueColor: AppColors.amber,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildTripPanel(TripData trip, BikeLogMsg m) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        CockpitLiveMap(
+          currentSpeedKmh: m.speed,
+          onExpandFullScreen: () => _openFullScreenMap(trip),
+        ),
+        const SizedBox(height: 12),
+        Panel(
+          padding: const EdgeInsets.all(14),
+          borderRadius: 20,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.timer_outlined, size: 18, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'THỐNG KÊ CHUYẾN ĐI',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.05 * 12,
+                        color: AppColors.textDim,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _formatDuration(trip.duration),
+                    style: GoogleFonts.spaceGrotesk(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                      color: AppColors.primary,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: MetricTile(
+                      icon: Icons.navigation_rounded,
+                      label: 'QUÃNG ĐƯỜNG',
+                      value: trip.distanceKm.toStringAsFixed(2),
+                      unit: 'km',
+                      valueColor: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: MetricTile(
+                      icon: Icons.speed_rounded,
+                      label: 'VẬN TỐC MAX',
+                      value: trip.maxSpeedKmh.toStringAsFixed(1),
+                      unit: 'km/h',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
+                    child: MetricTile(
+                      icon: Icons.timeline_rounded,
+                      label: 'VẬN TỐC TB',
+                      value: trip.avgSpeedKmh.toStringAsFixed(1),
+                      unit: 'km/h',
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: MetricTile(
+                      icon: Icons.battery_alert_rounded,
+                      label: 'TIÊU HAO PIN',
+                      value: '-${trip.usedPercent}',
+                      unit: '% pin',
+                      valueColor: AppColors.amber,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

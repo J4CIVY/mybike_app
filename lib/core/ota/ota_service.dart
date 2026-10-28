@@ -7,6 +7,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 
@@ -103,6 +104,28 @@ class OtaService {
       await sink.close();
     }
     onProgress(1.0);
+
+    // Kiểm tra tính toàn vẹn (Checksum / Hash verification)
+    if (board.hash != null && board.hash!.trim().isNotEmpty) {
+      final expectedHash = board.hash!.trim().toLowerCase();
+      final bytes = await file.readAsBytes();
+      final String calculatedHash;
+      if (expectedHash.length == 32) {
+        calculatedHash = md5.convert(bytes).toString().toLowerCase();
+      } else {
+        calculatedHash = sha256.convert(bytes).toString().toLowerCase();
+      }
+      if (calculatedHash != expectedHash) {
+        try {
+          await file.delete();
+        } catch (_) {}
+        throw OtaException(
+          'Mã băm firmware không khớp (Toàn vẹn tệp hỏng)! '
+          'Kỳ vọng: $expectedHash, Tính toán: $calculatedHash',
+        );
+      }
+    }
+
     return file;
   }
 }

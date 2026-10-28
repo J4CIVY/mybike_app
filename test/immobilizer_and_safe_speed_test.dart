@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -38,6 +38,33 @@ void main() {
       // Auto-secure flag độc lập, không bị ảnh hưởng
       expect(container.read(bleProvider).autoLockWalkAway, isFalse);
     });
+
+    test('walkUpAutoPowerOn + customizable RSSI ranges update state and persist', () async {
+      SharedPreferences.setMockInitialValues({});
+      final controller = TestBleController(const BleState(phase: BlePhase.idle));
+      final container = ProviderContainer(
+        overrides: [bleProvider.overrideWith(() => controller)],
+      );
+      addTearDown(container.dispose);
+      final notifier = container.read(bleProvider.notifier);
+
+      expect(container.read(bleProvider).walkUpAutoPowerOn, isFalse);
+      expect(container.read(bleProvider).walkUpRssiThreshold, isNull);
+      expect(container.read(bleProvider).autoLockRssiThreshold, isNull);
+
+      // Kích hoạt tính năng phụ: Bật xe sẵn khi tới gần
+      await notifier.setWalkUpAutoPowerOn(true);
+      expect(container.read(bleProvider).walkUpAutoPowerOn, isTrue);
+
+      // Tùy chỉnh mức sóng khi tới gần
+      await notifier.setWalkUpRssiThreshold(-50.0);
+      expect(container.read(bleProvider).walkUpRssiThreshold, -50.0);
+
+      // Tùy chỉnh mức sóng khi rời xa
+      await notifier.setAutoLockRssiThreshold(-88.5);
+      expect(container.read(bleProvider).autoLockRssiThreshold, -88.5);
+      expect(container.read(bleProvider).autoLockDistance, 2); // Xa
+    });
   });
 
 
@@ -59,12 +86,13 @@ void main() {
       final state = container.read(bleProvider);
       expect(state.speedLimitMode, 1);
       expect(state.eceMode, 1);
+      expect(state.fwSpeedLimitRaw, 1);
       expect(msg, contains('giới hạn tốc độ 60 km/h'));
     });
 
     test('setSafeSpeedLimit60(false) sets both to 0 and warns about VESC RAM power-cycle', () async {
       final controller = TestBleController(
-        const BleState(phase: BlePhase.idle, speedLimitMode: 1, eceMode: 1),
+        const BleState(phase: BlePhase.idle, speedLimitMode: 1, eceMode: 1, fwSpeedLimitRaw: 1),
       );
       final container = ProviderContainer(
         overrides: [
@@ -78,6 +106,7 @@ void main() {
       final state = container.read(bleProvider);
       expect(state.speedLimitMode, 0);
       expect(state.eceMode, 0);
+      expect(state.fwSpeedLimitRaw, 0);
       expect(msg, contains('VESC'));
       expect(msg, contains('RAM'));
     });

@@ -15,6 +15,7 @@ import '../../core/ble/ble_controller.dart';
 import '../../ui/app_theme.dart';
 import '../../ui/widgets.dart';
 import '../firmware_lab/firmware_lab_screen.dart';
+import '../logs/logs_screen.dart';
 
 class VehicleSettingsScreen extends ConsumerStatefulWidget {
   const VehicleSettingsScreen({super.key});
@@ -26,6 +27,7 @@ class VehicleSettingsScreen extends ConsumerStatefulWidget {
 class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
   bool _isReadingSerial = false;
   bool _isSyncingTime = false;
+  bool _isRefreshingDiagnostics = false;
 
   @override
   void initState() {
@@ -49,6 +51,21 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
         SnackBar(
           content: Text(serial != null ? '✅ Đã đọc số Serial xe: $serial' : 'Không thể đọc số Serial lúc này.'),
           backgroundColor: serial != null ? AppColors.tertiary : AppColors.amber,
+        ),
+      );
+    }
+  }
+
+  Future<void> _refreshDiagnostics() async {
+    setState(() => _isRefreshingDiagnostics = true);
+    await ref.read(bleProvider.notifier).fetchVehicleDiagnostics();
+    if (mounted) {
+      setState(() => _isRefreshingDiagnostics = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Đã làm mới thông tin phần cứng & snapshot VESC'),
+          backgroundColor: AppColors.tertiary,
+          duration: Duration(seconds: 2),
         ),
       );
     }
@@ -90,13 +107,26 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
         ),
         centerTitle: true,
         title: Text(
-          'Settings',
-          style: GoogleFonts.syne(
+          'Cài đặt xe',
+          style: GoogleFonts.plusJakartaSans(
             fontWeight: FontWeight.w700,
             fontSize: 18,
             color: const Color(0xFF0F172A),
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Nhật ký Bluetooth',
+            icon: const Icon(Icons.receipt_long_rounded, size: 22, color: Color(0xFF6366F1)),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const LogsScreen())),
+          ),
+          IconButton(
+            tooltip: 'Phòng Lab Firmware',
+            icon: const Icon(Icons.science_rounded, size: 22, color: Color(0xFF8B5CF6)),
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FirmwareLabScreen())),
+          ),
+          const SizedBox(width: 4),
+        ],
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
@@ -106,7 +136,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
           const SizedBox(height: 16),
 
           // 2. Đồng Hồ Taplo & Thời Gian Thực
-          const SectionTitle('ĐỒNG HỒ TAPLO & THỜI GIAN THỰC'),
+          const SectionTitle('ĐỒNG HỒ TAPLO'),
           const SizedBox(height: 10),
           _buildTimeSyncCard(ble, connected),
           const SizedBox(height: 16),
@@ -119,13 +149,19 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
           _buildLockLightsCard(ble, connected),
           const SizedBox(height: 16),
 
-          // 4. Tiện ích xe — đã verify round-trip
-          const SectionTitle('TIỆN ÍCH XE'),
+          // 4. Tiện ích & Tự động hóa ECU
+          const SectionTitle('TIỆN ÍCH & TỰ ĐỘNG'),
           const SizedBox(height: 10),
           _buildUtilityCard(ble, connected),
           const SizedBox(height: 16),
 
-          // 5. Nâng cao (thử nghiệm) — tính năng chưa có điều kiện hoạt động
+          // 5. Mẫu âm thanh còi tìm xe
+          const SectionTitle('ÂM BÁO TÌM XE'),
+          const SizedBox(height: 10),
+          _buildSoundPatternCard(ble, connected),
+          const SizedBox(height: 16),
+
+          // 6. Nâng cao (lệnh nặng)
           _buildAdvancedSection(ble, connected),
         ],
       ),
@@ -165,7 +201,14 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
                   color: AppColors.primary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.two_wheeler_rounded, color: AppColors.primary, size: 28),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(14),
+                  child: Image.asset(
+                    'assets/images/bike_logo_3d.png',
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const Icon(Icons.two_wheeler_rounded, color: AppColors.primary, size: 28),
+                  ),
+                ),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -339,6 +382,156 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 12),
+
+          // THẺ CHẨN ĐOÁN PHẦN CỨNG & SNAPSHOT VESC (Task 2.4)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.panelSecondary,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.panelBorder, width: 1),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF8B5CF6).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.memory_rounded, size: 14, color: Color(0xFF8B5CF6)),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'ĐỊNH DANH PHẦN CỨNG & SNAPSHOT VESC',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.5,
+                          color: AppColors.textDim,
+                        ),
+                      ),
+                    ),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(8),
+                      onTap: connected && !_isRefreshingDiagnostics ? _refreshDiagnostics : null,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: connected ? const Color(0xFF8B5CF6).withValues(alpha: 0.12) : AppColors.surface,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: connected ? const Color(0xFF8B5CF6).withValues(alpha: 0.3) : AppColors.panelBorder,
+                            width: 0.8,
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_isRefreshingDiagnostics)
+                              const SizedBox(
+                                width: 10,
+                                height: 10,
+                                child: CircularProgressIndicator(strokeWidth: 1.5, color: Color(0xFF8B5CF6)),
+                              )
+                            else
+                              const Icon(Icons.refresh_rounded, size: 12, color: Color(0xFF8B5CF6)),
+                            const SizedBox(width: 4),
+                            Text(
+                              _isRefreshingDiagnostics ? 'Đang đọc...' : 'Làm mới',
+                              style: GoogleFonts.plusJakartaSans(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: connected ? const Color(0xFF8B5CF6) : AppColors.textDim,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                // Model & Manifest
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Text(
+                          'Model: ',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
+                        ),
+                        Text(
+                          ble.bikeModelCode ?? 'QT_S1',
+                          style: GoogleFonts.spaceGrotesk(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          'Manifest: ',
+                          style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
+                        ),
+                        Expanded(
+                          child: Text(
+                            ble.boardManifest ?? '—',
+                            style: GoogleFonts.spaceGrotesk(fontSize: 10.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                // VESC 3x float
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.panelBorder, width: 0.8),
+                  ),
+                  child: Row(
+                    children: [
+                      _vescMetric('Dòng VESC', '${(ble.vescCurrent ?? 0.0).toStringAsFixed(2)} A'),
+                      Container(width: 1, height: 20, color: AppColors.panelBorder),
+                      _vescMetric('Điện Áp', '${(ble.vescVoltage ?? 0.0).toStringAsFixed(1)} V'),
+                      Container(width: 1, height: 20, color: AppColors.panelBorder),
+                      _vescMetric('Duty Cycle', '${((ble.vescDutyCycle ?? 0.0) * 100).toStringAsFixed(1)}%'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _vescMetric(String label, String value) {
+    return Expanded(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(label, style: GoogleFonts.plusJakartaSans(fontSize: 9.5, color: AppColors.textDim)),
+          ),
+          const SizedBox(height: 2),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(value, style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+          ),
         ],
       ),
     );
@@ -426,142 +619,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
     );
   }
 
-  // ========== THẺ 2: CẢM GIÁC LÁI & PHANH TÁI SINH ==========
-  Widget _buildPerformanceCard(BleState ble) {
-    return Panel(
-      padding: const EdgeInsets.all(18),
-      borderRadius: 20,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            margin: const EdgeInsets.only(bottom: 14),
-            decoration: BoxDecoration(
-              color: AppColors.amber.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.amber.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Icon(Icons.info_outline_rounded, color: AppColors.amber, size: 18),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'LƯU Ý KỸ THUẬT: Firmware xe hiện tại (v1.14.0) chưa hỗ trợ nạp cấu hình phanh RECUP & tay ga trực tiếp qua Bluetooth. Tùy chọn này được lưu làm hồ sơ cá nhân trên ứng dụng.',
-                    style: GoogleFonts.plusJakartaSans(
-                      fontSize: 11.5,
-                      color: AppColors.textPrimary,
-                      height: 1.4,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          // 1. Phanh tái sinh (Regenerative Braking RECUP)
-          Row(
-            children: [
-              const Icon(Icons.replay_circle_filled_rounded, color: AppColors.secondary, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Mức Phanh Tái Sinh (RECUP)',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Thu hồi động năng nạp ngược vào pack pin khi bạn buông tay ga.',
-            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textDim),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildSegmentOption(
-                label: 'Nhẹ',
-                desc: 'Trôi xe êm',
-                isSelected: ble.recupLevel == 0,
-                onTap: () => ref.read(bleProvider.notifier).setRecupLevel(0),
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(
-                label: 'Tiêu chuẩn',
-                desc: 'Cân bằng EV',
-                isSelected: ble.recupLevel == 1,
-                onTap: () => ref.read(bleProvider.notifier).setRecupLevel(1),
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(
-                label: 'Mạnh',
-                desc: 'One-Pedal',
-                isSelected: ble.recupLevel == 2,
-                onTap: () => ref.read(bleProvider.notifier).setRecupLevel(2),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Divider(color: AppColors.panelBorder, height: 1),
-          const SizedBox(height: 14),
 
-          // 2. Độ nhạy tay ga (Throttle Response)
-          Row(
-            children: [
-              const Icon(Icons.speed_rounded, color: AppColors.primary, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Độ Nhạy Phản Hồi Bướm Ga',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Điều chỉnh đường đặc tính đáp ứng mô-men xoắn của động cơ.',
-            style: GoogleFonts.plusJakartaSans(fontSize: 12, color: AppColors.textDim),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildSegmentOption(
-                label: 'Êm ái',
-                desc: 'Eco / Đường mưa',
-                isSelected: ble.throttleResponse == 0,
-                onTap: () => ref.read(bleProvider.notifier).setThrottleResponse(0),
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(
-                label: 'Tiêu chuẩn',
-                desc: 'Mượt mà đô thị',
-                isSelected: ble.throttleResponse == 1,
-                onTap: () => ref.read(bleProvider.notifier).setThrottleResponse(1),
-              ),
-              const SizedBox(width: 8),
-              _buildSegmentOption(
-                label: 'Thể thao',
-                desc: 'Đề pa bốc',
-                isSelected: ble.throttleResponse == 2,
-                onTap: () => ref.read(bleProvider.notifier).setThrottleResponse(2),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
 
   // ========== THẺ 3: MẪU ÂM THANH CÒI TÌM XE ==========
   Widget _buildSoundPatternCard(BleState ble, bool connected) {
@@ -721,7 +779,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
     );
   }
 
-  // ========== THẺ 4: GIỚI HẠN TỐC ĐỘ AN TOÀN (60 KM/H) ==========
+  // ========== THẺ 3: GIỚI HẠN TỐC ĐỘ AN TOÀN & VẬN HÀNH ĐỘNG CƠ ==========
   Widget _buildSpeedLimiterCard(BleState ble) {
     final connected = ble.phase == BlePhase.connected;
     return Panel(
@@ -760,6 +818,26 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
           Text(
             connected ? 'Tùy chọn tốc độ an toàn (ghi xuống xe ngay):' : 'Kết nối xe để ghi giới hạn tốc độ xuống firmware:',
             style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              StatusPill(
+                label: 'ECE: ${ble.eceMode}',
+                color: ble.eceMode == 1 ? AppColors.tertiary : AppColors.textDim,
+              ),
+              StatusPill(
+                label: 'SPEED: ${ble.speedLimitMode}',
+                color: ble.speedLimitMode == 1 ? AppColors.primary : AppColors.textDim,
+              ),
+              if (ble.fwSpeedLimitRaw != null)
+                StatusPill(
+                  label: 'RAW: ${ble.fwSpeedLimitRaw}',
+                  color: AppColors.secondary,
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           Row(
@@ -850,13 +928,66 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 16),
+          const Divider(color: AppColors.panelBorder, height: 1),
+          const SizedBox(height: 14),
+
+          // Chế độ Grab / Chở tải (a1d8e7c4 — MASTER_CONFIG_SERVICE)
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('CHẾ ĐỘ GRAB (XE DỊCH VỤ / CHỞ TẢI)',
+                        style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Điều chỉnh độ nhạy ga mượt mà, chở người hay hàng hóa không bị giật (kênh 0xa1d8e7c4)',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
+                    ),
+                  ],
+                ),
+              ),
+              StatusPill(
+                label: ble.grabMode == 1 ? 'GRAB: BẬT' : 'GRAB: TẮT',
+                color: ble.grabMode == 1 ? AppColors.tertiary : AppColors.textDim,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _buildSegmentOption(
+                label: 'Cá nhân',
+                desc: 'Ga nhạy',
+                isSelected: ble.grabMode == 0,
+                onTap: connected ? () async {
+                  ref.read(bleProvider.notifier).setGrabMode(0);
+                  _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(false));
+                } : null,
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(
+                label: 'Dịch vụ / Tải',
+                desc: 'Ga êm mượt',
+                isSelected: ble.grabMode == 1,
+                onTap: connected ? () async {
+                  ref.read(bleProvider.notifier).setGrabMode(1);
+                  _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(true));
+                } : null,
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  /// Tiện ích xe đã verify round-trip: tự tắt khi đỗ + đặt tên xe.
+  /// Tiện ích xe & Tự động hóa ECU: Tự tắt khi đỗ + Tự bật/tắt theo khoảng cách + Đặt tên + Thẻ NFC.
   Widget _buildUtilityCard(BleState ble, bool connected) {
+    final distLabel = ble.distanceRawU16 != null ? '${ble.distanceRawU16}' : 'Mặc định (8)';
+
     return Panel(
       padding: const EdgeInsets.all(18),
       borderRadius: 20,
@@ -867,7 +998,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
             children: [
               Expanded(
                 child: Text(
-                  'Tiện ích xử lý trực tiếp bởi firmware xe:',
+                  'Cấu hình tiện ích & tự động hóa trực tiếp bởi ECU:',
                   style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
                 ),
               ),
@@ -885,7 +1016,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
           ),
           const SizedBox(height: 14),
 
-          // Tự tắt khi đỗ
+          // 1. Tự tắt khi đỗ (69c79762)
           Row(
             children: [
               Expanded(
@@ -894,7 +1025,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
                   children: [
                     Text('TỰ TẮT KHI ĐỖ', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
                     const SizedBox(height: 2),
-                    Text('Xe tự tắt nguồn sau khi đỗ lâu (idling turn-off)',
+                    Text('Xe tự tắt nguồn sau khi đỗ lâu (idling turn-off 69c79762)',
                         style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim)),
                   ],
                 ),
@@ -909,10 +1040,58 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
               ),
             ],
           ),
+          const Divider(color: AppColors.panelBorder, height: 24),
 
-          // Đặt tên xe — ghi THẬT xuống flash qua char 88c30d2c (firmware
-          // setName, Ghidra-verified). Cũng là cách khôi phục tên nếu lỡ
-          // chạy bản "SỬA CÒI" v1.5.1 (bản đó ghi nhầm UUID vào ô tên xe).
+          // 2. Tự bật/tắt theo khoảng cách bởi ECU (5d681587)
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('TỰ BẬT/TẮT THEO KHOẢNG CÁCH (ECU 5d681587)',
+                        style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text(
+                      'ECU tự mở khi lại gần & ngắt khi rời xa · Ngưỡng NVS: $distLabel',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
+                    ),
+                  ],
+                ),
+              ),
+              StatusPill(
+                label: ble.distanceMode > 0 ? 'BẬT (NVS: $distLabel)' : 'TẮT',
+                color: ble.distanceMode > 0 ? AppColors.tertiary : AppColors.textDim,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _buildSegmentOption(
+                label: 'Tắt',
+                desc: 'Thủ công',
+                isSelected: ble.distanceMode == 0,
+                onTap: connected ? () async {
+                  ref.read(bleProvider.notifier).setDistanceMode(0);
+                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(false));
+                } : null,
+              ),
+              const SizedBox(width: 8),
+              _buildSegmentOption(
+                label: 'Bật',
+                desc: 'NVS $distLabel',
+                isSelected: ble.distanceMode > 0,
+                onTap: connected ? () async {
+                  ref.read(bleProvider.notifier).setDistanceMode(1);
+                  _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(true));
+                } : null,
+              ),
+            ],
+          ),
+          const Divider(color: AppColors.panelBorder, height: 24),
+
+          // 3. Đặt tên xe — ghi THẬT xuống flash qua char 88c30d2c
           SizedBox(
             width: double.infinity,
             child: OutlinedButton.icon(
@@ -924,7 +1103,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
               ),
               icon: const Icon(Icons.drive_file_rename_outline_rounded, size: 18),
               label: Text(
-                'ĐẶT TÊN XE (lưu xuống xe)',
+                'ĐẶT TÊN XE (lưu flash 88c30d2c)',
                 style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
               ),
               onPressed: connected ? () async {
@@ -972,13 +1151,51 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
               } : null,
             ),
           ),
+          const SizedBox(height: 12),
+
+          // 4. Thêm thẻ NFC mới (c75ebe03 — AUTH_SERVICE)
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              style: FilledButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const Icon(Icons.credit_card_rounded, size: 18),
+              label: Text(
+                'THÊM THẺ NFC MỚI (c75ebe03)',
+                style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
+              ),
+              onPressed: connected ? () async {
+                final ok = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    backgroundColor: AppColors.panel,
+                    title: Text('Thêm thẻ NFC mới?', style: GoogleFonts.spaceGrotesk(fontSize: 16)),
+                    content: Text(
+                      'App gửi lệnh đăng ký thẻ xuống xe qua cổng c75ebe03 → bạn quẹt THẺ MỚI vào đầu đọc trên xe trong ~10 giây. Firmware sẽ lưu thẻ vào danh sách mở khóa.',
+                      style: GoogleFonts.plusJakartaSans(fontSize: 12.5, height: 1.4),
+                    ),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
+                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bắt đầu')),
+                    ],
+                  ),
+                );
+                if (ok == true) {
+                  _showResult(await ref.read(bleProvider.notifier).startAddNfcCard());
+                }
+              } : null,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  /// Khóa an toàn + Đèn xe — cả hai ĐÃ VERIFY trên xe thật (LAB 23-24/10).
-  /// Khóa theo QUY TRÌNH CHUẨN: app tự TẮT xe trước khi ARM (xem lockBike).
+  /// Khóa an toàn + Cổng cứu hộ b0ca953d — Cả hai đã verify trên xe thật (LAB).
   Widget _buildLockLightsCard(BleState ble, bool connected) {
     return Panel(
       padding: const EdgeInsets.all(18),
@@ -1038,24 +1255,65 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
           ),
           const Divider(color: AppColors.panelBorder, height: 24),
 
-          // Cảnh báo an toàn b0ca953d (onWriteVescProgamming @0x4015565c — RE2 verified)
-          Row(
+          // Cảnh báo an toàn b0ca953d & Nút cứu hộ khôi phục (RE2 Task [6.5])
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('CỔNG b0ca953d (VESC PROGRAMMING / DEV MODE)',
-                        style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.amber)),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Đính chính RE2: b0ca953d là công tắc đảo bit (XOR) cờ nạp VESC (cfg+0x62), làm ngắt vescPollTask (IM=0) và tắt đèn như hệ quả phụ. Đã khóa trên màn hình chính để đảm bảo an toàn.',
-                      style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'CỔNG b0ca953d (VESC PROGRAMMING)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.spaceGrotesk(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: ble.vescProgActive ? AppColors.error : AppColors.amber,
+                      ),
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 8),
+                  StatusPill(
+                    label: ble.vescProgActive ? 'ĐANG KẸT DEV MODE (0x01)' : 'BÌNH THƯỜNG (0x00)',
+                    color: ble.vescProgActive ? AppColors.error : AppColors.tertiary,
+                  ),
+                ],
               ),
-              const Icon(Icons.lock_outline_rounded, size: 20, color: AppColors.amber),
+              const SizedBox(height: 4),
+              Text(
+                'Đính chính RE2: b0ca953d là công tắc đảo bit (XOR) cờ nạp VESC (cfg+0x62), làm ngắt vescPollTask (IM=0). Khi kẹt ở 0x01, xe sẽ ngừng nhận telemetry động cơ.',
+                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
+              ),
+              if (ble.vescProgActive) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.restore_rounded, size: 18),
+                    label: Text(
+                      'KHÔI PHỤC VỀ NORMAL (0x00)',
+                      style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w700),
+                    ),
+                    onPressed: connected
+                        ? () async {
+                            try {
+                              final res = await ref.read(bleProvider.notifier).recoverFromVescProgrammingMode();
+                              _showResult(res);
+                            } catch (e) {
+                              _showResult('Lỗi cứu hộ: $e');
+                            }
+                          }
+                        : null,
+                  ),
+                ),
+              ],
             ],
           ),
         ],
@@ -1063,9 +1321,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
     );
   }
 
-  /// NÂNG CAO (THỬ NGHIỆM) — tính năng chưa có điều kiện xác minh hiệu ứng
-  /// hoặc không khả dụng trên dòng xe này. Gom hết vào đây để màn hình chính
-  /// chỉ chứa những gì đã verify hoạt động.
+  /// NÂNG CAO (LỆNH NẶNG NGUY HIỂM) — chỉ dành cho kỹ thuật viên
   Widget _buildAdvancedSection(BleState ble, bool connected) {
     return Container(
       decoration: BoxDecoration(
@@ -1082,13 +1338,13 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
             childrenPadding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
             iconColor: AppColors.textDim,
             title: Text(
-              'NÂNG CAO (THỬ NGHIỆM) — ẩn các tính năng chưa xác minh',
+              'NÂNG CAO (LỆNH NẶNG NGUY HIỂM)',
               style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textDim),
             ),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 3),
               child: Text(
-                'Hồ sơ lái local · Chế độ Grab · Tự bật/tắt theo khoảng cách · Profile sạc (dòng Era) · Thẻ NFC · Tắt BMS · Factory reset · LAB',
+                'Tắt hẳn BMS (đỗ lâu) · Khôi phục cài đặt gốc BLE (Factory Reset)',
                 style: GoogleFonts.plusJakartaSans(fontSize: 10.5, color: AppColors.textDim),
               ),
             ),
@@ -1104,183 +1360,20 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.science_outlined, size: 14, color: AppColors.amber),
+                    const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.amber),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Các mục dưới đây CHƯA xác minh đầy đủ trên xe của bạn (hoặc chỉ có trên dòng xe khác) — dùng thận trọng và đối chiếu log.',
-                        style: GoogleFonts.plusJakartaSans(fontSize: 10.5, color: AppColors.textDim, height: 1.35),
+                        'Các thao tác dưới đây có tác động trực tiếp đến nguồn pin và kết nối của xe — chỉ thực hiện khi thực sự cần thiết.',
+                        style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim, height: 1.35),
                       ),
                     ),
                   ],
                 ),
               ),
 
-              // Hồ sơ lái local (firmware 1.14.0 chưa hỗ trợ ghi RECUP/ga qua BLE)
-              _buildPerformanceCard(ble),
-              const SizedBox(height: 12),
-
-              // Nhịp còi tìm xe (thay đổi tần suất lặp gói hú)
-              _buildSoundPatternCard(ble, connected),
-              const SizedBox(height: 12),
-
-              // Grab mode — round-trip OK nhưng hiệu ứng lái chưa quan sát được
-              Text('CHẾ ĐỘ GRAB (xe dịch vụ / chống giật ga) — chưa xác minh hiệu ứng', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text('Ghi xuống xe OK (đọc lại đúng giá trị) nhưng khác biệt khi lái chưa quan sát được trên xe này.',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildSegmentOption(label: 'Cá nhân', desc: 'Ga nhạy', isSelected: ble.grabMode == 0,
-                    onTap: () async {
-                      ref.read(bleProvider.notifier).setGrabMode(0);
-                      _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(false));
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _buildSegmentOption(label: 'Dịch vụ / Tải', desc: 'Ga êm mượt', isSelected: ble.grabMode == 1,
-                    onTap: () async {
-                      ref.read(bleProvider.notifier).setGrabMode(1);
-                      _showResult(await ref.read(bleProvider.notifier).setFwGrabMode(true));
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Distance auto on/off — round-trip OK, hiệu ứng cần di chuyển mới thấy
-              Text('TỰ BẬT/TẮT THEO KHOẢNG CÁCH (bởi xe) — chưa xác minh', style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text('Xe tự BẬT khi điện thoại đến gần, TẮT khi ra xa (firmware xử lý). Cần di chuyển xa/gần mới thấy hiệu ứng — chưa xác minh trên xe này.',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim)),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildSegmentOption(label: 'Tắt', desc: '—', isSelected: ble.distanceMode == 0,
-                    onTap: () async {
-                      ref.read(bleProvider.notifier).setDistanceMode(0);
-                      _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(false));
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _buildSegmentOption(label: 'Bật', desc: 'Mức 1', isSelected: ble.distanceMode == 1,
-                    onTap: () async {
-                      ref.read(bleProvider.notifier).setDistanceMode(1);
-                      _showResult(await ref.read(bleProvider.notifier).setFwDistanceMode(true));
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Chế độ sạc dòng xe Era (8a2b0d10 — RAW byte 0x00 / 0x01 / 0x02)
-              Text(
-                'CHẾ ĐỘ SẠC DÒNG XE ERA (STANDARD / FAST / BOOST)',
-                style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Ghi 1 byte RAW (0x00=Standard, 0x01=Fast, 0x02=Boost) vào cổng 0x8A2B0D10 (NVS charging/defaultProfile). Hoạt động trên dòng Dat Bike Era (trên Quantum S1 chỉ lưu NVS).',
-                style: GoogleFonts.plusJakartaSans(fontSize: 11, color: AppColors.textDim),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildSegmentOption(
-                    label: 'Standard',
-                    desc: '0x00 · Bền pin',
-                    isSelected: ble.chargingProfile == 0,
-                    onTap: () async {
-                      ref.read(bleProvider.notifier).setChargingProfile(0);
-                      _showResult(await ref.read(bleProvider.notifier).setFwChargingProfile(0));
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _buildSegmentOption(
-                    label: 'Fast',
-                    desc: '0x01 · Sạc nhanh',
-                    isSelected: ble.chargingProfile == 1,
-                    onTap: () async {
-                      ref.read(bleProvider.notifier).setChargingProfile(1);
-                      _showResult(await ref.read(bleProvider.notifier).setFwChargingProfile(1));
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  _buildSegmentOption(
-                    label: 'Boost',
-                    desc: '0x02 · Siêu tốc',
-                    isSelected: ble.chargingProfile == 2,
-                    onTap: () async {
-                      ref.read(bleProvider.notifier).setChargingProfile(2);
-                      _showResult(await ref.read(bleProvider.notifier).setFwChargingProfile(2));
-                    },
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Thêm thẻ NFC
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  icon: const Icon(Icons.credit_card_rounded, size: 18),
-                  label: Text(
-                    'THÊM THẺ NFC MỚI (cần thẻ mới trong tay)',
-                    style: GoogleFonts.spaceGrotesk(fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.3),
-                  ),
-                  onPressed: connected ? () async {
-                    final ok = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: AppColors.panel,
-                        title: Text('Thêm thẻ NFC mới?', style: GoogleFonts.spaceGrotesk(fontSize: 16)),
-                        content: Text(
-                          'App gửi lệnh đăng ký thẻ xuống xe → bạn quẹt THẺ MỚI vào đầu đọc trên xe trong ~10 giây. Firmware sẽ lưu thẻ vào danh sách mở khóa (card1/card2…).',
-                          style: GoogleFonts.plusJakartaSans(fontSize: 12.5, height: 1.4),
-                        ),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Hủy')),
-                          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Bắt đầu')),
-                        ],
-                      ),
-                    );
-                    if (ok == true) {
-                      _showResult(await ref.read(bleProvider.notifier).startAddNfcCard());
-                    }
-                  } : null,
-                ),
-              ),
-              const SizedBox(height: 12),
-
               // Tắt BMS + Factory reset
               _buildAdvancedCard(ble, connected),
-              const SizedBox(height: 12),
-
-              // Vào Phòng Kiểm Nghiệm Firmware (LAB)
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    side: BorderSide(color: AppColors.secondary.withValues(alpha: 0.5)),
-                  ),
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FirmwareLabScreen()),
-                  ),
-                  icon: const Icon(Icons.science_rounded, size: 18),
-                  label: Text(
-                    '🧪 PHÒNG KIỂM NGHIỆM FIRMWARE (LAB)',
-                    style: GoogleFonts.spaceGrotesk(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
             ],
           ),
         ),
@@ -1391,7 +1484,7 @@ class _VehicleSettingsScreenState extends ConsumerState<VehicleSettingsScreen> {
     required String label,
     required String desc,
     required bool isSelected,
-    required VoidCallback onTap,
+    VoidCallback? onTap,
   }) {
     return Expanded(
       child: GestureDetector(

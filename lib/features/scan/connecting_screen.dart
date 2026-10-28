@@ -38,7 +38,7 @@ class _ConnectingScreenState extends ConsumerState<ConnectingScreen> {
     try {
       await ref.read(bleProvider.notifier).connect(device, name: name);
       if (!mounted) return;
-      Navigator.of(context).pushReplacementNamed('/dashboard');
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (!mounted) return;
       setState(() => _detail = 'Lỗi kết nối: $e');

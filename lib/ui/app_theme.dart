@@ -105,7 +105,7 @@ class AppTypography {
     double? letterSpacing,
     double? height,
   }) =>
-      GoogleFonts.syne(
+      GoogleFonts.plusJakartaSans(
         fontSize: fontSize,
         fontWeight: fontWeight,
         letterSpacing: letterSpacing ?? -0.5,
@@ -259,7 +259,7 @@ class AppTheme {
         elevation: 0,
         centerTitle: true,
         iconTheme: const IconThemeData(color: AppColors.textPrimary, size: 20),
-        titleTextStyle: GoogleFonts.syne(
+        titleTextStyle: GoogleFonts.plusJakartaSans(
           color: AppColors.textPrimary,
           fontSize: 18,
           fontWeight: FontWeight.w700,

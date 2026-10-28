@@ -630,7 +630,7 @@ class SectionTitle extends StatelessWidget {
           Expanded(
             child: Text(
               text.toUpperCase(),
-              style: GoogleFonts.syne(
+              style: GoogleFonts.plusJakartaSans(
                 fontSize: 12.5,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.5,

@@ -89,8 +89,8 @@ class Gatt {
   static const sessionUuid = '87efab0d-9e32-4ab8-8916-ed7cb72d819a';
 
   /// POWER_SWITCH_CHAR / WAKE_HONK (350d9a82) — Đăng ký Write-Only PLAIN Write:
-  /// - Khi bật/tắt nguồn: phối hợp cùng 7f13fe5c ('1' bật, '0' tắt).
-  /// - Khi xe đang tắt máy: ghi plain '1' phát 1 tiếng còi đánh thức MCU (dùng làm Tìm xe).
+  /// - Khi xe đang tắt máy: ghi plain '1' phát 1 tiếng còi + chớp Hazard (dùng làm Tìm xe).
+  /// - Tuyệt đối KHÔNG dùng đơn lẻ để Bật/Tắt nguồn (lệnh Bật/Tắt nguồn thật phải gửi Protected Write lên 7f13fe5c).
   static const powerSwitchChar = '350d9a82-b3f3-4213-bdda-6403be495f53';
 
   /// Còi tìm xe thực tế khi xe đang tắt máy (ghi plain '1' vào 350d9a82).
@@ -136,9 +136,10 @@ class Gatt {
   /// Protected Read (2B u16 LE, default 8) / Protected Write ('1'/'0').
   static const distanceChar = '5d681587-c268-4bd3-9560-66ec79dbfdc8';
 
-  /// BẬT/TẮT NGUỒN ĐỘNG (7f13fe5c — BLEInfo):
-  /// Firmware đăng ký Write-Only Protected Write ('1' = bật nguồn, '0' = tắt nguồn);
+  /// BẬT/TẮT NGUỒN ĐỘNG THẬT (7f13fe5c — BLEInfo):
+  /// Firmware đăng ký Write-Only Protected Write ('1' = bật nguồn sáng Taplo sẵn sàng chạy, '0' = tắt nguồn);
   /// không có read handler nên đọc lại chỉ trả plain echo byte cuối trong buffer NimBLE.
+  static const powerOnOffChar = '7f13fe5c-1971-4fec-97fd-f90e16cf8c28';
   static const lockBikeChar = '7f13fe5c-1971-4fec-97fd-f90e16cf8c28';
 
   /// CHẾ ĐỘ NẠP VESC / DEV MODE (b0ca953d — BLEInfo) — ⚠️ CẢNH BÁO AN TOÀN (RE2 verified):

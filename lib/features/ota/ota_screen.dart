@@ -67,7 +67,7 @@ class _OtaScreenState extends ConsumerState<OtaScreen> {
         centerTitle: true,
         title: Text(
           'OTA Firmware',
-          style: GoogleFonts.syne(
+          style: GoogleFonts.plusJakartaSans(
             fontWeight: FontWeight.w700,
             fontSize: 18,
             color: const Color(0xFF0F172A),

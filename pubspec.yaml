@@ -1,7 +1,7 @@
 name: mybike_app
 description: "My Bike App — Smart electric vehicle dashboard and controller."
 publish_to: 'none'
-version: 2.2.0+38
+version: 2.6.6+51
 environment:
   sdk: ^3.13.2
 dependencies:
@@ -19,6 +19,9 @@ dependencies:
   flutter_secure_storage: ^10.0.0
   share_plus: ^13.3.1
   device_info_plus: ^13.3.0
+  flutter_map: ^8.3.2
+  latlong2: ^0.10.1
+  geolocator: ^14.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -35,3 +38,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/images/
+    - assets/icon/
+

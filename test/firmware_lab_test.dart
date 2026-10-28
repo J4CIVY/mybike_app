@@ -1,4 +1,4 @@
-// Smoke test màn hình Firmware Lab — dựng được, render đủ số test trong catalog.
+﻿// Smoke test màn hình Firmware Lab — dựng được, render đủ số test trong catalog.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

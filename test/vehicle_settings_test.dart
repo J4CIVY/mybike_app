@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mybike_app/core/ble/ble_controller.dart';
@@ -43,7 +43,7 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Cài đặt xe'), findsOneWidget);
   });
 
   testWidgets('VehicleSettingsScreen handles long frame serial without breaking layout', (tester) async {

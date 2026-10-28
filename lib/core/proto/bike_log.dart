@@ -75,6 +75,48 @@ class BikeLogMsg {
   /// Xe đang bật nguồn (không ở trạng thái off hoặc lock)
   bool get isBikeOn => state != BikeState.off && state != BikeState.lock;
 
+  /// Mode lái hiển thị trên Badge
+  String get drivingModeLabel {
+    switch (state) {
+      case BikeState.drive:
+        return 'DRIVE (D)';
+      case BikeState.super_:
+        return 'SPORT (S)';
+      case BikeState.reverse:
+        return 'REVERSE (R)';
+      case BikeState.turtle:
+        return 'ECO (E)';
+      case BikeState.parking:
+        return 'PARKING (P)';
+      case BikeState.standBy:
+        return 'STANDBY';
+      case BikeState.off:
+        return 'OFF';
+      case BikeState.lock:
+        return 'LOCKED';
+      case BikeState.cruiseControl:
+        return 'CRUISE';
+    }
+  }
+
+  String get drivingModeShort {
+    switch (state) {
+      case BikeState.super_:
+        return 'S';
+      case BikeState.reverse:
+        return 'R';
+      case BikeState.turtle:
+        return 'E';
+      case BikeState.parking:
+        return 'P';
+      case BikeState.drive:
+      default:
+        return 'D';
+    }
+  }
+
+  bool get isSideStandDown => parking;
+
   @override
   String toString() => 'Bike(name=$name, model=$model, state=$state, '
       'speed=$speed, odo=$odo, kmLeft=$kmLeft, soc=$percent%, v=$voltage, '
@@ -102,10 +144,30 @@ class BatteryLogMsg {
   double socSoc = 0;
   double socAbsAh = 0;
 
+  double get minCellVol {
+    if (cellVols.isEmpty) return 0.0;
+    return cellVols.reduce((a, b) => a < b ? a : b);
+  }
+
+  double get maxCellVol {
+    if (cellVols.isEmpty) return 0.0;
+    return cellVols.reduce((a, b) => a > b ? a : b);
+  }
+
+  double get deltaCellMv {
+    if (cellVols.isEmpty) return 0.0;
+    return (maxCellVol - minCellVol) * 1000.0;
+  }
+
+  bool get isDeltaCritical => deltaCellMv > 30.0;
+
   @override
   String toString() => 'Battery(v=$voltage, i=$current, cells=${cellVols.length}, '
-      'soc=$socSoc, cycles=$socCycles, error=$error)';
+      'delta=${deltaCellMv.toStringAsFixed(1)}mV, soc=$socSoc, cycles=$socCycles, error=$error)';
 }
+
+/// Giải mã Identity Protobuf 108B từ cổng 018e6a6f (BikeIdentity)
+BikeLogMsg decodeBikeIdentityLog(Uint8List data) => decodeBikeLogMsg(data);
 
 // ---------------------------------------------------------------------------
 // Wire-format primitives
