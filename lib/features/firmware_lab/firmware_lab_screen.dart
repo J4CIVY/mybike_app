@@ -1,7 +1,6 @@
 // Laboratorio de Firmware (LAB) — validación y pruebas BLE con el vehículo.
 
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -71,7 +70,8 @@ class _FirmwareLabScreenState extends ConsumerState<FirmwareLabScreen> {
       for (final e in res.lastPerTest.entries) {
         final s = _stateOf(e.key);
         s.verdict = e.value['verdict'] as String?;
-        if (e.value['note'] is String && (e.value['note'] as String).isNotEmpty) {
+        if (e.value['note'] is String &&
+            (e.value['note'] as String).isNotEmpty) {
           s.note.text = e.value['note'] as String;
         }
       }
@@ -93,7 +93,9 @@ class _FirmwareLabScreenState extends ConsumerState<FirmwareLabScreen> {
         _toast('No hay resultados disponibles para exportar.');
         return;
       }
-      await SharePlus.instance.share(ShareParams(files: [XFile(f.path)], text: 'Resultados LAB BSKMT'));
+      await SharePlus.instance.share(
+        ShareParams(files: [XFile(f.path)], text: 'Resultados LAB BSKMT'),
+      );
     } catch (e) {
       _toast('Error al compartir: $e');
     }
@@ -101,7 +103,9 @@ class _FirmwareLabScreenState extends ConsumerState<FirmwareLabScreen> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), backgroundColor: AppColors.amber));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: AppColors.amber),
+    );
   }
 
   Future<void> _runOp(LabCharTest t, String op) async {
@@ -165,7 +169,11 @@ class _FirmwareLabScreenState extends ConsumerState<FirmwareLabScreen> {
       appBar: AppBar(
         title: Text(
           '🧪 LABORATORIO DE FIRMWARE BSKMT',
-          style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700, fontSize: 17, color: AppColors.textPrimary),
+          style: GoogleFonts.spaceGrotesk(
+            fontWeight: FontWeight.w700,
+            fontSize: 17,
+            color: AppColors.textPrimary,
+          ),
         ),
         actions: [
           IconButton(
@@ -213,7 +221,11 @@ class _FirmwareLabScreenState extends ConsumerState<FirmwareLabScreen> {
                 padding: const EdgeInsets.only(top: 10, bottom: 6),
                 child: Text(
                   cat,
-                  style: GoogleFonts.spaceGrotesk(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.textDim),
+                  style: GoogleFonts.spaceGrotesk(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textDim,
+                  ),
                 ),
               ),
               for (final t in grouped[cat]!) ...[
@@ -221,8 +233,11 @@ class _FirmwareLabScreenState extends ConsumerState<FirmwareLabScreen> {
                   test: t,
                   uiState: _stateOf(t.id),
                   connected: connected,
-                  onToggleHex: () => setState(() => _stateOf(t.id).isHex = !_stateOf(t.id).isHex),
-                  onSelectWriteMode: (m) => setState(() => _stateOf(t.id).modeOverride = m),
+                  onToggleHex: () => setState(
+                    () => _stateOf(t.id).isHex = !_stateOf(t.id).isHex,
+                  ),
+                  onSelectWriteMode: (m) =>
+                      setState(() => _stateOf(t.id).modeOverride = m),
                   onSelectPreset: (i) => setState(() {
                     final s = _stateOf(t.id);
                     s.selectedPreset = i;
@@ -236,7 +251,10 @@ class _FirmwareLabScreenState extends ConsumerState<FirmwareLabScreen> {
                   },
                   onNoteChanged: (_) {
                     _noteDebounce?.cancel();
-                    _noteDebounce = Timer(const Duration(milliseconds: 1200), () => _saveVerdict(t));
+                    _noteDebounce = Timer(
+                      const Duration(milliseconds: 1200),
+                      () => _saveVerdict(t),
+                    );
                   },
                 ),
                 const SizedBox(height: 10),

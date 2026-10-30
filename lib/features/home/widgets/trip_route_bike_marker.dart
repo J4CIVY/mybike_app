@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -48,7 +47,9 @@ class TripRouteBikeMarker extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: isMoving ? const Color(0x600284C7) : const Color(0x352563EB),
+                            color: isMoving
+                                ? const Color(0x600284C7)
+                                : const Color(0x352563EB),
                             blurRadius: isMoving ? 14 : 8,
                             spreadRadius: isMoving ? 3 : 1,
                           ),
@@ -133,7 +134,9 @@ class TripRouteBikeMarker extends StatelessWidget {
                 color: const Color(0xF20F172A),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                  color: isMoving ? const Color(0x6638BDF8) : const Color(0x3394A3B8),
+                  color: isMoving
+                      ? const Color(0x6638BDF8)
+                      : const Color(0x3394A3B8),
                   width: 1,
                 ),
                 boxShadow: const [
@@ -150,7 +153,9 @@ class TripRouteBikeMarker extends StatelessWidget {
                   Icon(
                     Icons.bolt_rounded,
                     size: 11,
-                    color: isMoving ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+                    color: isMoving
+                        ? const Color(0xFF10B981)
+                        : const Color(0xFF38BDF8),
                   ),
                   const SizedBox(width: 2),
                   Text(
@@ -191,11 +196,7 @@ class HeadlightBeamPainter extends CustomPainter {
       ..shader = RadialGradient(
         center: const Alignment(0, 0.1),
         radius: 0.85,
-        colors: const [
-          Color(0x6638BDF8),
-          Color(0x2638BDF8),
-          Color(0x0038BDF8),
-        ],
+        colors: const [Color(0x6638BDF8), Color(0x2638BDF8), Color(0x0038BDF8)],
         stops: const [0.0, 0.5, 1.0],
       ).createShader(Rect.fromCircle(center: center, radius: 46));
 

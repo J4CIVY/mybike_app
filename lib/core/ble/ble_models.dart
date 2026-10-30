@@ -1,12 +1,16 @@
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
-
 import '../proto/bike_log.dart';
 import '../models/trip_gps_point.dart';
 
 export '../models/trip_gps_point.dart';
 
-enum BlePhase { idle, scanning, connecting, connected, reconnecting, disconnected }
+enum BlePhase {
+  idle,
+  scanning,
+  connecting,
+  connected,
+  reconnecting,
+  disconnected,
+}
 
 class BikeTelemetry {
   final BikeLogMsg? bike;
@@ -38,15 +42,14 @@ class TripData {
     double? maxSpeedKmh,
     int? usedPercent,
     double? powerKw,
-  }) =>
-      TripData(
-        distanceKm: distanceKm ?? this.distanceKm,
-        duration: duration ?? this.duration,
-        avgSpeedKmh: avgSpeedKmh ?? this.avgSpeedKmh,
-        maxSpeedKmh: maxSpeedKmh ?? this.maxSpeedKmh,
-        usedPercent: usedPercent ?? this.usedPercent,
-        powerKw: powerKw ?? this.powerKw,
-      );
+  }) => TripData(
+    distanceKm: distanceKm ?? this.distanceKm,
+    duration: duration ?? this.duration,
+    avgSpeedKmh: avgSpeedKmh ?? this.avgSpeedKmh,
+    maxSpeedKmh: maxSpeedKmh ?? this.maxSpeedKmh,
+    usedPercent: usedPercent ?? this.usedPercent,
+    powerKw: powerKw ?? this.powerKw,
+  );
 }
 
 class TripRecord {
@@ -88,8 +91,10 @@ class TripRecord {
   };
 
   factory TripRecord.fromJson(Map<String, dynamic> json) => TripRecord(
-    startTime: DateTime.tryParse(json['startTime'] as String? ?? '') ?? DateTime.now(),
-    endTime: DateTime.tryParse(json['endTime'] as String? ?? '') ?? DateTime.now(),
+    startTime:
+        DateTime.tryParse(json['startTime'] as String? ?? '') ?? DateTime.now(),
+    endTime:
+        DateTime.tryParse(json['endTime'] as String? ?? '') ?? DateTime.now(),
     distanceKm: (json['distanceKm'] as num?)?.toDouble() ?? 0.0,
     durationSec: (json['durationSec'] as num?)?.toInt() ?? 0,
     avgSpeedKmh: (json['avgSpeedKmh'] as num?)?.toDouble() ?? 0.0,
@@ -97,7 +102,8 @@ class TripRecord {
     usedPercent: (json['usedPercent'] as num?)?.toInt() ?? 0,
     startOdo: (json['startOdo'] as num?)?.toDouble(),
     endOdo: (json['endOdo'] as num?)?.toDouble(),
-    route: (json['route'] as List?)
+    route:
+        (json['route'] as List?)
             ?.map((e) => TripGpsPoint.fromJson(e as Map<String, dynamic>))
             .toList() ??
         const [],
@@ -127,4 +133,3 @@ class LabIoResult {
     this.elapsedMs = 0,
   });
 }
-

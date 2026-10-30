@@ -1,8 +1,9 @@
 ﻿import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mybike_app/core/models/bskmt_models.dart';
+
 import 'bskmt_api_service.dart';
 
 export 'package:mybike_app/core/models/bskmt_models.dart';
+
 export 'bskmt_api_service.dart';
 
 class BskmtState {
@@ -48,7 +49,9 @@ class BskmtState {
       isAuthenticated: isAuthenticated ?? this.isAuthenticated,
       user: user ?? this.user,
       motorcycles: motorcycles ?? this.motorcycles,
-      activeMotorcycle: clearActiveMotorcycle ? null : (activeMotorcycle ?? this.activeMotorcycle),
+      activeMotorcycle: clearActiveMotorcycle
+          ? null
+          : (activeMotorcycle ?? this.activeMotorcycle),
       documentAlerts: documentAlerts ?? this.documentAlerts,
       alliedWorkshops: alliedWorkshops ?? this.alliedWorkshops,
       errorMessage: errorMessage,
@@ -71,10 +74,7 @@ class BskmtNotifier extends Notifier<BskmtState> {
     state = state.copyWith(isLoading: true);
     final hasSession = await _api.initSession();
     if (hasSession && _api.currentUser != null) {
-      state = state.copyWith(
-        isAuthenticated: true,
-        user: _api.currentUser,
-      );
+      state = state.copyWith(isAuthenticated: true, user: _api.currentUser);
       await refreshGarage();
     } else {
       state = state.copyWith(isLoading: false, isAuthenticated: false);
@@ -82,7 +82,11 @@ class BskmtNotifier extends Notifier<BskmtState> {
   }
 
   Future<bool> login(String email, String password) async {
-    state = state.copyWith(isLoading: true, errorMessage: null, successMessage: null);
+    state = state.copyWith(
+      isLoading: true,
+      errorMessage: null,
+      successMessage: null,
+    );
     try {
       final user = await _api.login(email: email, password: password);
       if (user != null) {
@@ -94,7 +98,10 @@ class BskmtNotifier extends Notifier<BskmtState> {
         await refreshGarage();
         return true;
       }
-      state = state.copyWith(isLoading: false, errorMessage: 'Credenciales inválidas');
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Credenciales inválidas',
+      );
       return false;
     } catch (e) {
       final msg = e.toString().replaceFirst('Exception: ', '');
@@ -113,8 +120,10 @@ class BskmtNotifier extends Notifier<BskmtState> {
     try {
       final data = await _api.fetchGarageDashboard();
       final motos = (data['motorcycles'] as List<BskmtMotorcycle>?) ?? [];
-      final alerts = (data['documentAlerts'] as List<BskmtDocumentAlert>?) ?? [];
-      final workshops = (data['alliedWorkshops'] as List<BskmtAlliedWorkshop>?) ?? [];
+      final alerts =
+          (data['documentAlerts'] as List<BskmtDocumentAlert>?) ?? [];
+      final workshops =
+          (data['alliedWorkshops'] as List<BskmtAlliedWorkshop>?) ?? [];
       final active = data['activeMotorcycle'] as BskmtMotorcycle?;
 
       state = state.copyWith(
@@ -135,7 +144,9 @@ class BskmtNotifier extends Notifier<BskmtState> {
     if (motoOrId is BskmtMotorcycle) {
       state = state.copyWith(activeMotorcycle: motoOrId);
     } else if (motoOrId is String) {
-      final found = state.motorcycles.where((m) => m.id == motoOrId).firstOrNull;
+      final found = state.motorcycles
+          .where((m) => m.id == motoOrId)
+          .firstOrNull;
       if (found != null) {
         state = state.copyWith(activeMotorcycle: found);
       }
@@ -145,7 +156,10 @@ class BskmtNotifier extends Notifier<BskmtState> {
   Future<bool> syncOdometer(num odo) async {
     final motoId = state.activeMotorcycle?.id;
     if (motoId == null || motoId.isEmpty) return false;
-    return _api.updateOdometer(motorcycleId: motoId, odometerKm: odo.toDouble());
+    return _api.updateOdometer(
+      motorcycleId: motoId,
+      odometerKm: odo.toDouble(),
+    );
   }
 
   Future<bool> requestArphaHelp({
@@ -154,7 +168,11 @@ class BskmtNotifier extends Notifier<BskmtState> {
     required String requestType,
     required String description,
   }) async {
-    state = state.copyWith(isLoading: true, errorMessage: null, successMessage: null);
+    state = state.copyWith(
+      isLoading: true,
+      errorMessage: null,
+      successMessage: null,
+    );
     try {
       await _api.requestArphaSos(
         latitude: lat,
@@ -180,4 +198,6 @@ class BskmtNotifier extends Notifier<BskmtState> {
   }
 }
 
-final bskmtProvider = NotifierProvider<BskmtNotifier, BskmtState>(BskmtNotifier.new);
+final bskmtProvider = NotifierProvider<BskmtNotifier, BskmtState>(
+  BskmtNotifier.new,
+);

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -24,15 +23,15 @@ class DashboardPowerBadge extends StatelessWidget {
         color: isRecup
             ? AppColors.tertiary.withValues(alpha: 0.12)
             : isDraw
-                ? AppColors.secondary.withValues(alpha: 0.12)
-                : AppColors.panelSecondary,
+            ? AppColors.secondary.withValues(alpha: 0.12)
+            : AppColors.panelSecondary,
         borderRadius: BorderRadius.circular(9999),
         border: Border.all(
           color: isRecup
               ? AppColors.tertiary
               : isDraw
-                  ? AppColors.secondary
-                  : AppColors.panelBorder,
+              ? AppColors.secondary
+              : AppColors.panelBorder,
           width: 1,
         ),
       ),
@@ -43,30 +42,30 @@ class DashboardPowerBadge extends StatelessWidget {
             isRecup
                 ? Icons.recycling_rounded
                 : isDraw
-                    ? Icons.electric_bolt_rounded
-                    : Icons.remove_rounded,
+                ? Icons.electric_bolt_rounded
+                : Icons.remove_rounded,
             size: 14,
             color: isRecup
                 ? AppColors.tertiary
                 : isDraw
-                    ? AppColors.secondary
-                    : AppColors.textDim,
+                ? AppColors.secondary
+                : AppColors.textDim,
           ),
           const SizedBox(width: 5),
           Text(
             isRecup
                 ? '+${powerKw.toStringAsFixed(2)} kW RECUP'
                 : isDraw
-                    ? '${powerKw.abs().toStringAsFixed(2)} kW'
-                    : '0.00 kW',
+                ? '${powerKw.abs().toStringAsFixed(2)} kW'
+                : '0.00 kW',
             style: GoogleFonts.spaceGrotesk(
               fontSize: 11.5,
               fontWeight: FontWeight.w700,
               color: isRecup
                   ? AppColors.tertiary
                   : isDraw
-                      ? AppColors.secondary
-                      : AppColors.textDim,
+                  ? AppColors.secondary
+                  : AppColors.textDim,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
@@ -75,4 +74,3 @@ class DashboardPowerBadge extends StatelessWidget {
     );
   }
 }
-

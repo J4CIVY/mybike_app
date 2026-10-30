@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -56,7 +55,10 @@ class BikeTelemetryCard extends StatelessWidget {
             if (hasTelemetry) ...[
               if (isSideStandDown) ...[
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFFFEF2F2),
                     borderRadius: BorderRadius.circular(10),
@@ -65,7 +67,11 @@ class BikeTelemetryCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.report_problem_rounded, size: 13, color: Color(0xFFEF4444)),
+                      const Icon(
+                        Icons.report_problem_rounded,
+                        size: 13,
+                        color: Color(0xFFEF4444),
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         'PATA ABAJO',
@@ -104,10 +110,16 @@ class BikeTelemetryCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                const Icon(Icons.bolt_rounded, size: 17, color: Color(0xFF10B981)),
+                const Icon(
+                  Icons.bolt_rounded,
+                  size: 17,
+                  color: Color(0xFF10B981),
+                ),
                 const SizedBox(width: 4),
                 Text(
-                  hasTelemetry ? '$percentDisplay% Batería ($kmLeftDisplay km)' : '--% Batería (Sin conexión)',
+                  hasTelemetry
+                      ? '$percentDisplay% Batería ($kmLeftDisplay km)'
+                      : '--% Batería (Sin conexión)',
                   style: GoogleFonts.spaceGrotesk(
                     fontSize: 13.5,
                     fontWeight: FontWeight.w600,
@@ -139,7 +151,11 @@ class BikeTelemetryCard extends StatelessWidget {
               ],
             ),
             const SizedBox(width: 10),
-            const Icon(Icons.swap_horiz_rounded, size: 16, color: Color(0xFF94A3B8)),
+            const Icon(
+              Icons.swap_horiz_rounded,
+              size: 16,
+              color: Color(0xFF94A3B8),
+            ),
           ],
         ),
         const SizedBox(height: 8),
@@ -150,7 +166,9 @@ class BikeTelemetryCard extends StatelessWidget {
               child: Container(
                 height: 4,
                 decoration: BoxDecoration(
-                  color: hasTelemetry ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
+                  color: hasTelemetry
+                      ? const Color(0xFF10B981)
+                      : const Color(0xFFE2E8F0),
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
@@ -161,7 +179,9 @@ class BikeTelemetryCard extends StatelessWidget {
               child: Container(
                 height: 4,
                 decoration: BoxDecoration(
-                  color: hasTelemetry ? BskmtColors.crimson : const Color(0xFFE2E8F0),
+                  color: hasTelemetry
+                      ? BskmtColors.crimson
+                      : const Color(0xFFE2E8F0),
                   borderRadius: BorderRadius.circular(3),
                 ),
               ),
@@ -181,4 +201,3 @@ class BikeTelemetryCard extends StatelessWidget {
     );
   }
 }
-

@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -33,7 +32,8 @@ class MetricTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Panel(
-      padding: padding ?? const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding:
+          padding ?? const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
       borderRadius: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,19 +45,29 @@ class MetricTile extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(5),
                 decoration: BoxDecoration(
-                  color: (accentColor ?? AppColors.primary).withValues(alpha: 0.08),
+                  color: (accentColor ?? AppColors.primary).withValues(
+                    alpha: 0.08,
+                  ),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, size: 15, color: accentColor ?? AppColors.primary),
+                child: Icon(
+                  icon,
+                  size: 15,
+                  color: accentColor ?? AppColors.primary,
+                ),
               ),
               if (delta != null)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      deltaPositive ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                      deltaPositive
+                          ? Icons.arrow_upward_rounded
+                          : Icons.arrow_downward_rounded,
                       size: 11,
-                      color: deltaPositive ? AppColors.tertiary : AppColors.error,
+                      color: deltaPositive
+                          ? AppColors.tertiary
+                          : AppColors.error,
                     ),
                     const SizedBox(width: 2),
                     Text(
@@ -65,7 +75,9 @@ class MetricTile extends StatelessWidget {
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        color: deltaPositive ? AppColors.tertiary : AppColors.error,
+                        color: deltaPositive
+                            ? AppColors.tertiary
+                            : AppColors.error,
                       ),
                     ),
                   ],
@@ -125,4 +137,3 @@ class MetricTile extends StatelessWidget {
     );
   }
 }
-

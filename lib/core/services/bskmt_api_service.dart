@@ -1,7 +1,8 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+
 import '../models/bskmt_models.dart';
 
 export '../models/bskmt_models.dart';
@@ -21,7 +22,8 @@ class BskmtApiService {
 
   String get baseUrl => _baseUrl;
   BskmtUser? get currentUser => _currentUser;
-  bool get isAuthenticated => _sessionToken != null && _sessionToken!.isNotEmpty;
+  bool get isAuthenticated =>
+      _sessionToken != null && _sessionToken!.isNotEmpty;
 
   void setBaseUrl(String url) {
     _baseUrl = url.replaceAll(RegExp(r'/+$'), '');
@@ -74,7 +76,8 @@ class BskmtApiService {
 
       if (res.statusCode >= 200 && res.statusCode < 300) {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
-        final token = data['token']?.toString() ??
+        final token =
+            data['token']?.toString() ??
             data['session']?['token']?.toString() ??
             res.headers['set-cookie'];
 
@@ -100,7 +103,9 @@ class BskmtApiService {
     try {
       if (_sessionToken != null) {
         final uri = Uri.parse('$_baseUrl/api/auth/sign-out');
-        await http.post(uri, headers: _buildHeaders()).catchError((_) => http.Response('', 200));
+        await http
+            .post(uri, headers: _buildHeaders())
+            .catchError((_) => http.Response('', 200));
       }
     } finally {
       _sessionToken = null;
@@ -121,7 +126,10 @@ class BskmtApiService {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final user = BskmtUser.fromJson(data, defaultEmail: fallbackEmail);
         _currentUser = user;
-        await _storage.write(key: 'bskmt_user_profile', value: jsonEncode(data));
+        await _storage.write(
+          key: 'bskmt_user_profile',
+          value: jsonEncode(data),
+        );
         return user;
       }
     } catch (_) {}
@@ -129,7 +137,9 @@ class BskmtApiService {
   }
 
   /// Consulta los datos completos del Garage Virtual del usuario en BSKMT (/garage)
-  Future<Map<String, dynamic>> fetchGarageDashboard({String? motorcycleId}) async {
+  Future<Map<String, dynamic>> fetchGarageDashboard({
+    String? motorcycleId,
+  }) async {
     const emptyGarage = {
       'hasVehicles': false,
       'motorcycles': <BskmtMotorcycle>[],
@@ -191,14 +201,13 @@ class BskmtApiService {
     if (!isAuthenticated || motorcycleId.isEmpty) return false;
 
     try {
-      final uri = Uri.parse('$_baseUrl/garage/motorcycles/$motorcycleId/odometer');
+      final uri = Uri.parse(
+        '$_baseUrl/garage/motorcycles/$motorcycleId/odometer',
+      );
       final res = await http.post(
         uri,
         headers: _buildHeaders(),
-        body: jsonEncode({
-          'odometerKm': odometerKm.round(),
-          'source': source,
-        }),
+        body: jsonEncode({'odometerKm': odometerKm.round(), 'source': source}),
       );
 
       return res.statusCode == 200 || res.statusCode == 201;
@@ -216,7 +225,9 @@ class BskmtApiService {
     String? plate,
   }) async {
     if (!isAuthenticated) {
-      throw Exception('Debes iniciar sesión con tu cuenta BSKMT para solicitar ARPHA SOS');
+      throw Exception(
+        'Debes iniciar sesión con tu cuenta BSKMT para solicitar ARPHA SOS',
+      );
     }
 
     try {
@@ -239,7 +250,9 @@ class BskmtApiService {
         return jsonDecode(res.body) as Map<String, dynamic>;
       } else {
         final err = jsonDecode(res.body);
-        throw Exception(err['message'] ?? 'No se pudo generar la solicitud ARPHA');
+        throw Exception(
+          err['message'] ?? 'No se pudo generar la solicitud ARPHA',
+        );
       }
     } catch (_) {
       rethrow;

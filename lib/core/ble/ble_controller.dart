@@ -8,7 +8,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../proto/bike_log.dart';
-import '../models/trip_gps_point.dart';
 import '../services/foreground_service.dart';
 import '../services/trip_gps_tracker.dart';
 import '../session/bike_session_crypto.dart';
@@ -101,7 +100,10 @@ class BleController extends Notifier<BleState> {
   String? _lastRawStatusSig;
 
   final _telemetry = StreamController<BikeTelemetry>.broadcast();
-  final _rssiKalman = KalmanFilter1D(processNoise: 0.008, measurementNoise: 4.0);
+  final _rssiKalman = KalmanFilter1D(
+    processNoise: 0.008,
+    measurementNoise: 4.0,
+  );
   double? _smoothedRssi;
   int _autoLockCounter = 0;
   int _theftCounter = 0;
@@ -147,4 +149,6 @@ class BleController extends Notifier<BleState> {
   }
 }
 
-final bleProvider = NotifierProvider<BleController, BleState>(BleController.new);
+final bleProvider = NotifierProvider<BleController, BleState>(
+  BleController.new,
+);

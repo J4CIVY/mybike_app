@@ -15,10 +15,16 @@ class ArphaSosDialog {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           title: Row(
             children: [
-              const Icon(Icons.emergency_rounded, color: AppColors.error, size: 26),
+              const Icon(
+                Icons.emergency_rounded,
+                color: AppColors.error,
+                size: 26,
+              ),
               const SizedBox(width: 10),
               Text(
                 'Solicitar Asistencia ARPHA',
@@ -36,25 +42,48 @@ class ArphaSosDialog {
               children: [
                 Text(
                   'El equipo de auxilio en carretera recibirá tus coordenadas GPS y placa para despachar apoyo inmediato.',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 12.5, color: AppColors.textDim),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12.5,
+                    color: AppColors.textDim,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
                   'Tipo de emergencia:',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: selectedType,
+                  initialValue: selectedType,
                   decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   items: const [
-                    DropdownMenuItem(value: 'mecanica', child: Text('Falla Mecánica / Motor')),
-                    DropdownMenuItem(value: 'electrica', child: Text('Falla Eléctrica / Batería')),
-                    DropdownMenuItem(value: 'remolque', child: Text('Grúa / Pinchazo')),
-                    DropdownMenuItem(value: 'medica', child: Text('Asistencia Médica')),
+                    DropdownMenuItem(
+                      value: 'mecanica',
+                      child: Text('Falla Mecánica / Motor'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'electrica',
+                      child: Text('Falla Eléctrica / Batería'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'remolque',
+                      child: Text('Grúa / Pinchazo'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'medica',
+                      child: Text('Asistencia Médica'),
+                    ),
                   ],
                   onChanged: (val) {
                     if (val != null) setDialogState(() => selectedType = val);
@@ -63,7 +92,10 @@ class ArphaSosDialog {
                 const SizedBox(height: 14),
                 Text(
                   'Detalle de la situación (opcional):',
-                  style: GoogleFonts.plusJakartaSans(fontSize: 12, fontWeight: FontWeight.w700),
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 TextField(
@@ -71,8 +103,13 @@ class ArphaSosDialog {
                   maxLines: 2,
                   decoration: InputDecoration(
                     hintText: 'Ej: Se apagó en la vía a La Calera',
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                 ),
               ],
@@ -83,13 +120,18 @@ class ArphaSosDialog {
               onPressed: () => Navigator.pop(ctx),
               child: Text(
                 'CANCELAR',
-                style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, color: AppColors.textDim),
+                style: GoogleFonts.plusJakartaSans(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textDim,
+                ),
               ),
             ),
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: AppColors.error,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               onPressed: () async {
                 Navigator.pop(ctx);
@@ -97,7 +139,9 @@ class ArphaSosDialog {
                 final lat = loc?.latitude ?? 4.7110;
                 final lng = loc?.longitude ?? -74.0721;
 
-                final ok = await ref.read(bskmtProvider.notifier).requestArphaHelp(
+                final ok = await ref
+                    .read(bskmtProvider.notifier)
+                    .requestArphaHelp(
                       lat: lat,
                       lng: lng,
                       requestType: selectedType,
@@ -110,8 +154,14 @@ class ArphaSosDialog {
                   final state = ref.read(bskmtProvider);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(ok ? state.successMessage ?? 'Solicitud enviada' : state.errorMessage ?? 'Error al solicitar ARPHA'),
-                      backgroundColor: ok ? AppColors.tertiary : AppColors.error,
+                      content: Text(
+                        ok
+                            ? state.successMessage ?? 'Solicitud enviada'
+                            : state.errorMessage ?? 'Error al solicitar ARPHA',
+                      ),
+                      backgroundColor: ok
+                          ? AppColors.tertiary
+                          : AppColors.error,
                     ),
                   );
                 }
@@ -127,4 +177,3 @@ class ArphaSosDialog {
     );
   }
 }
-

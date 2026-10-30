@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -9,10 +8,7 @@ import '../../../ui/widgets.dart';
 class DashboardHardwareInfo extends StatelessWidget {
   final BikeLogMsg msg;
 
-  const DashboardHardwareInfo({
-    super.key,
-    required this.msg,
-  });
+  const DashboardHardwareInfo({super.key, required this.msg});
 
   @override
   Widget build(BuildContext context) {
@@ -34,9 +30,15 @@ class DashboardHardwareInfo extends StatelessWidget {
             '${msg.left ? "← Izquierda  " : ""}${msg.right ? "Derecha →  " : ""}${!msg.left && !msg.right ? "Apagadas" : ""}',
           ),
           _divider(),
-          _infoRow('Número de chasis (VIN)', msg.frame.isEmpty ? '—' : msg.frame),
+          _infoRow(
+            'Número de chasis (VIN)',
+            msg.frame.isEmpty ? '—' : msg.frame,
+          ),
           _divider(),
-          _infoRow('Versión de Firmware', msg.version.isEmpty ? '1.14.0' : msg.version),
+          _infoRow(
+            'Versión de Firmware',
+            msg.version.isEmpty ? '1.14.0' : msg.version,
+          ),
         ],
       ),
     );
@@ -47,7 +49,13 @@ class DashboardHardwareInfo extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
         children: [
-          Text(label, style: GoogleFonts.plusJakartaSans(color: AppColors.textDim, fontSize: 13.5)),
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              color: AppColors.textDim,
+              fontSize: 13.5,
+            ),
+          ),
           const Spacer(),
           Text(
             value,
@@ -63,6 +71,10 @@ class DashboardHardwareInfo extends StatelessWidget {
     );
   }
 
-  Widget _divider() => const Divider(height: 1, indent: 16, endIndent: 16, color: AppColors.panelBorder);
+  Widget _divider() => const Divider(
+    height: 1,
+    indent: 16,
+    endIndent: 16,
+    color: AppColors.panelBorder,
+  );
 }
-

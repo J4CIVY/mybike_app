@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -46,7 +45,10 @@ class OfflineTileImageProvider extends ImageProvider<OfflineTileImageProvider> {
   }
 
   @override
-  ImageStreamCompleter loadImage(OfflineTileImageProvider key, ImageDecoderCallback decode) {
+  ImageStreamCompleter loadImage(
+    OfflineTileImageProvider key,
+    ImageDecoderCallback decode,
+  ) {
     return MultiFrameImageStreamCompleter(
       codec: _loadAsync(key, decode),
       scale: 1.0,
@@ -57,7 +59,10 @@ class OfflineTileImageProvider extends ImageProvider<OfflineTileImageProvider> {
     );
   }
 
-  Future<ui.Codec> _loadAsync(OfflineTileImageProvider key, ImageDecoderCallback decode) async {
+  Future<ui.Codec> _loadAsync(
+    OfflineTileImageProvider key,
+    ImageDecoderCallback decode,
+  ) async {
     final file = await OfflineMapService.instance.getTileFile(
       coordinates.z,
       coordinates.x,
@@ -76,26 +81,94 @@ class OfflineTileImageProvider extends ImageProvider<OfflineTileImageProvider> {
 
     try {
       final uri = Uri.parse(url);
-      final response = await http.get(uri, headers: headers).timeout(const Duration(seconds: 6));
+      final response = await http
+          .get(uri, headers: headers)
+          .timeout(const Duration(seconds: 6));
       if (response.statusCode == 200 && response.bodyBytes.isNotEmpty) {
         unawaited(
-          file.parent.create(recursive: true).then((_) {
-            file.writeAsBytes(response.bodyBytes);
-          }).catchError((_) {}),
+          file.parent
+              .create(recursive: true)
+              .then((_) {
+                file.writeAsBytes(response.bodyBytes);
+              })
+              .catchError((_) {}),
         );
 
-        final buffer = await ui.ImmutableBuffer.fromUint8List(response.bodyBytes);
+        final buffer = await ui.ImmutableBuffer.fromUint8List(
+          response.bodyBytes,
+        );
         return await decode(buffer);
       }
     } catch (_) {}
 
     final transparentPng = Uint8List.fromList([
-      0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
-      0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-      0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
-      0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-      0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
-      0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+      0x89,
+      0x50,
+      0x4E,
+      0x47,
+      0x0D,
+      0x0A,
+      0x1A,
+      0x0A,
+      0x00,
+      0x00,
+      0x00,
+      0x0D,
+      0x49,
+      0x48,
+      0x44,
+      0x52,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x00,
+      0x01,
+      0x08,
+      0x06,
+      0x00,
+      0x00,
+      0x00,
+      0x1F,
+      0x15,
+      0xC4,
+      0x89,
+      0x00,
+      0x00,
+      0x00,
+      0x0A,
+      0x49,
+      0x44,
+      0x41,
+      0x54,
+      0x78,
+      0x9C,
+      0x63,
+      0x00,
+      0x01,
+      0x00,
+      0x00,
+      0x05,
+      0x00,
+      0x01,
+      0x0D,
+      0x0A,
+      0x2D,
+      0xB4,
+      0x00,
+      0x00,
+      0x00,
+      0x00,
+      0x49,
+      0x45,
+      0x4E,
+      0x44,
+      0xAE,
+      0x42,
+      0x60,
+      0x82,
     ]);
     final buffer = await ui.ImmutableBuffer.fromUint8List(transparentPng);
     return decode(buffer);
@@ -112,4 +185,3 @@ class OfflineTileImageProvider extends ImageProvider<OfflineTileImageProvider> {
   @override
   int get hashCode => Object.hash(coordinates, url);
 }
-

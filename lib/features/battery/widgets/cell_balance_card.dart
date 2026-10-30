@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -9,10 +8,7 @@ import '../../../ui/widgets.dart';
 class CellBalanceCard extends StatelessWidget {
   final BatteryHealthReport report;
 
-  const CellBalanceCard({
-    super.key,
-    required this.report,
-  });
+  const CellBalanceCard({super.key, required this.report});
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +49,9 @@ class CellBalanceCard extends StatelessWidget {
                     textBaseline: TextBaseline.alphabetic,
                     children: [
                       Text(
-                        hasCells ? report.deltaVoltageMv.toStringAsFixed(1) : '--',
+                        hasCells
+                            ? report.deltaVoltageMv.toStringAsFixed(1)
+                            : '--',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 34,
                           fontWeight: FontWeight.w800,
@@ -100,13 +98,17 @@ class CellBalanceCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.15)),
+                    border: Border.all(
+                      color: AppColors.primary.withValues(alpha: 0.15),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        hasCells ? 'Celda más alta (#${report.maxCellIndex})' : 'Celda más alta',
+                        hasCells
+                            ? 'Celda más alta (#${report.maxCellIndex})'
+                            : 'Celda más alta',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
@@ -115,7 +117,9 @@ class CellBalanceCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        hasCells ? '${report.maxCellVoltage.toStringAsFixed(3)} V' : '-- V',
+                        hasCells
+                            ? '${report.maxCellVoltage.toStringAsFixed(3)} V'
+                            : '-- V',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -132,28 +136,40 @@ class CellBalanceCard extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: (report.deltaVoltageMv > 80 ? AppColors.error : AppColors.amber)
-                        .withValues(alpha: 0.08),
+                    color:
+                        (report.deltaVoltageMv > 80
+                                ? AppColors.error
+                                : AppColors.amber)
+                            .withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: (report.deltaVoltageMv > 80 ? AppColors.error : AppColors.amber)
-                          .withValues(alpha: 0.25),
+                      color:
+                          (report.deltaVoltageMv > 80
+                                  ? AppColors.error
+                                  : AppColors.amber)
+                              .withValues(alpha: 0.25),
                     ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        hasCells ? 'Celda más baja (#${report.minCellIndex})' : 'Celda más baja',
+                        hasCells
+                            ? 'Celda más baja (#${report.minCellIndex})'
+                            : 'Celda más baja',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
-                          color: report.deltaVoltageMv > 80 ? AppColors.error : AppColors.amber,
+                          color: report.deltaVoltageMv > 80
+                              ? AppColors.error
+                              : AppColors.amber,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        hasCells ? '${report.minCellVoltage.toStringAsFixed(3)} V' : '-- V',
+                        hasCells
+                            ? '${report.minCellVoltage.toStringAsFixed(3)} V'
+                            : '-- V',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -187,7 +203,9 @@ class CellBalanceCard extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        hasCells ? '${report.avgCellVoltage.toStringAsFixed(3)} V' : '-- V',
+                        hasCells
+                            ? '${report.avgCellVoltage.toStringAsFixed(3)} V'
+                            : '-- V',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
@@ -206,4 +224,3 @@ class CellBalanceCard extends StatelessWidget {
     );
   }
 }
-

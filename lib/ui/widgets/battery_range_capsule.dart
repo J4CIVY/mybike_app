@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -25,8 +24,8 @@ class BatteryRangeCapsule extends StatelessWidget {
     final color = isCharging
         ? AppColors.secondary
         : (percent < 20
-            ? AppColors.error
-            : (percent > 60 ? AppColors.tertiary : AppColors.primary));
+              ? AppColors.error
+              : (percent > 60 ? AppColors.tertiary : AppColors.primary));
 
     return Panel(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -39,7 +38,9 @@ class BatteryRangeCapsule extends StatelessWidget {
           Row(
             children: [
               Icon(
-                isCharging ? Icons.bolt_rounded : Icons.battery_charging_full_rounded,
+                isCharging
+                    ? Icons.bolt_rounded
+                    : Icons.battery_charging_full_rounded,
                 color: color,
                 size: 20,
               ),
@@ -123,7 +124,11 @@ class BatteryRangeCapsule extends StatelessWidget {
                     color: AppColors.primary,
                   ),
                 ),
-                const Icon(Icons.arrow_forward_ios_rounded, size: 12, color: AppColors.primary),
+                const Icon(
+                  Icons.arrow_forward_ios_rounded,
+                  size: 12,
+                  color: AppColors.primary,
+                ),
               ],
             ),
           ],
@@ -132,4 +137,3 @@ class BatteryRangeCapsule extends StatelessWidget {
     );
   }
 }
-

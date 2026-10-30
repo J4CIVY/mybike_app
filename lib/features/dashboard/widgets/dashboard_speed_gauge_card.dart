@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -80,7 +79,11 @@ class DashboardSpeedGaugeCard extends StatelessWidget {
             children: [
               DashboardGaugeWithSpeed(msg: msg, gaugeSize: gaugeSize),
               const SizedBox(height: 6),
-              DashboardPowerBadge(powerKw: powerKw, isRecup: isRecup, isDraw: isDraw),
+              DashboardPowerBadge(
+                powerKw: powerKw,
+                isRecup: isRecup,
+                isDraw: isDraw,
+              ),
               const SizedBox(height: 14),
               DashboardMetricsRow(msg: msg),
             ],
@@ -90,4 +93,3 @@ class DashboardSpeedGaugeCard extends StatelessWidget {
     );
   }
 }
-

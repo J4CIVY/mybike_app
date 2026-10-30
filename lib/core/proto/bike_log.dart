@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'bike_models.dart';
-import 'dashboard_struct_decoder.dart';
 import 'proto_wire_reader.dart';
 
 export 'bike_models.dart';
@@ -134,10 +133,14 @@ BatteryLogMsg decodeBatteryLogMsg(Uint8List data) {
             .toList();
       }
       if (map['NTCs'] is List) {
-        m.ntcs = (map['NTCs'] as List).map((e) => (e as num).toDouble()).toList();
+        m.ntcs = (map['NTCs'] as List)
+            .map((e) => (e as num).toDouble())
+            .toList();
       }
       if (map['protections'] is List) {
-        m.protections = (map['protections'] as List).map((e) => (e as num).toInt()).toList();
+        m.protections = (map['protections'] as List)
+            .map((e) => (e as num).toInt())
+            .toList();
       }
       if (map['soc'] is Map) {
         final s = map['soc'] as Map<String, dynamic>;

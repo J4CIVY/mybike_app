@@ -8,7 +8,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 
 import '../models/offline_map_models.dart';
-import 'offline_cache_tile_provider.dart';
 import 'offline_map_downloader.dart';
 
 export '../models/offline_map_models.dart';
@@ -50,7 +49,8 @@ class OfflineMapService {
     return file.exists();
   }
 
-  Future<({int tileCount, int totalBytes, String sizeText})> getCacheStats() async {
+  Future<({int tileCount, int totalBytes, String sizeText})>
+  getCacheStats() async {
     try {
       final dir = await getCacheDirectory();
       int count = 0;
@@ -93,7 +93,10 @@ class OfflineMapService {
 
   static int lat2tileY(double lat, int z) {
     final rad = lat * math.pi / 180.0;
-    return ((1.0 - math.log(math.tan(rad) + 1.0 / math.cos(rad)) / math.pi) / 2.0 * (1 << z)).floor();
+    return ((1.0 - math.log(math.tan(rad) + 1.0 / math.cos(rad)) / math.pi) /
+            2.0 *
+            (1 << z))
+        .floor();
   }
 
   static List<OfflineRegionPreset> getPresets() {
@@ -103,21 +106,30 @@ class OfflineMapService {
         name: 'Bogotá & Sabana',
         description: 'Centro, Chapinero, Usaquén, Chía',
         icon: Icons.location_city_rounded,
-        bounds: LatLngBounds(const LatLng(4.48, -74.25), const LatLng(4.85, -74.00)),
+        bounds: LatLngBounds(
+          const LatLng(4.48, -74.25),
+          const LatLng(4.85, -74.00),
+        ),
       ),
       OfflineRegionPreset(
         id: 'medellin',
         name: 'Medellín & Valle de Aburrá',
         description: 'Poblado, Laureles, Bello, Envigado',
         icon: Icons.account_balance_rounded,
-        bounds: LatLngBounds(const LatLng(6.15, -75.65), const LatLng(6.36, -75.50)),
+        bounds: LatLngBounds(
+          const LatLng(6.15, -75.65),
+          const LatLng(6.36, -75.50),
+        ),
       ),
       OfflineRegionPreset(
         id: 'cali',
         name: 'Cali & Yumbo',
         description: 'Granada, San Antonio, Ciudad Jardín',
         icon: Icons.beach_access_rounded,
-        bounds: LatLngBounds(const LatLng(3.30, -76.60), const LatLng(3.55, -76.45)),
+        bounds: LatLngBounds(
+          const LatLng(3.30, -76.60),
+          const LatLng(3.55, -76.45),
+        ),
       ),
     ];
   }
@@ -125,7 +137,8 @@ class OfflineMapService {
   static LatLngBounds createRadiusBounds(LatLng center, double radiusKm) {
     const latKm = 111.0;
     final deltaLat = radiusKm / latKm;
-    final deltaLng = radiusKm / (latKm * math.cos(center.latitude * math.pi / 180.0));
+    final deltaLng =
+        radiusKm / (latKm * math.cos(center.latitude * math.pi / 180.0));
     return LatLngBounds(
       LatLng(center.latitude - deltaLat, center.longitude - deltaLng),
       LatLng(center.latitude + deltaLat, center.longitude + deltaLng),
@@ -162,29 +175,31 @@ class OfflineMapService {
 
   void pauseDownload() => _downloader.pauseDownload();
 
-  Future<Map<String, dynamic>?> getPendingTask() => _downloader.getPendingTask();
+  Future<Map<String, dynamic>?> getPendingTask() =>
+      _downloader.getPendingTask();
 
   Future<void> clearPendingTask() => _downloader.clearPendingTask();
 
-  Future<void> resumeDownload({void Function(DownloadProgress progress)? onProgress}) =>
-      _downloader.resumeDownload(onProgress: onProgress);
+  Future<void> resumeDownload({
+    void Function(DownloadProgress progress)? onProgress,
+  }) => _downloader.resumeDownload(onProgress: onProgress);
 
   Future<void> downloadRegion({
     required LatLngBounds bounds,
     required int minZoom,
     required int maxZoom,
     String regionName = 'Mapa offline',
-    String urlTemplate = 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+    String urlTemplate =
+        'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
     List<String> subdomains = const ['a', 'b', 'c'],
     void Function(DownloadProgress progress)? onProgress,
-  }) =>
-      _downloader.downloadRegion(
-        bounds: bounds,
-        minZoom: minZoom,
-        maxZoom: maxZoom,
-        regionName: regionName,
-        urlTemplate: urlTemplate,
-        subdomains: subdomains,
-        onProgress: onProgress,
-      );
+  }) => _downloader.downloadRegion(
+    bounds: bounds,
+    minZoom: minZoom,
+    maxZoom: maxZoom,
+    regionName: regionName,
+    urlTemplate: urlTemplate,
+    subdomains: subdomains,
+    onProgress: onProgress,
+  );
 }

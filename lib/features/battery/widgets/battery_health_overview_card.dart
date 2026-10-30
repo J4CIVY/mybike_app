@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -32,15 +31,19 @@ class BatteryHealthOverviewCard extends StatelessWidget {
                     width: 68,
                     height: 68,
                     child: CircularProgressIndicator(
-                      value: report.hasLiveTelemetry ? (report.safetyScore / 100.0) : 0.0,
+                      value: report.hasLiveTelemetry
+                          ? (report.safetyScore / 100.0)
+                          : 0.0,
                       strokeWidth: 6,
                       backgroundColor: AppColors.panelBorder,
                       valueColor: AlwaysStoppedAnimation<Color>(
                         !report.hasLiveTelemetry
                             ? AppColors.textDim
                             : (report.safetyScore >= 90
-                                ? AppColors.tertiary
-                                : (report.safetyScore >= 70 ? AppColors.amber : AppColors.error)),
+                                  ? AppColors.tertiary
+                                  : (report.safetyScore >= 70
+                                        ? AppColors.amber
+                                        : AppColors.error)),
                       ),
                     ),
                   ),
@@ -48,11 +51,15 @@ class BatteryHealthOverviewCard extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        report.hasLiveTelemetry ? '${report.safetyScore}' : '--',
+                        report.hasLiveTelemetry
+                            ? '${report.safetyScore}'
+                            : '--',
                         style: GoogleFonts.spaceGrotesk(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
-                          color: report.hasLiveTelemetry ? AppColors.textPrimary : AppColors.textDim,
+                          color: report.hasLiveTelemetry
+                              ? AppColors.textPrimary
+                              : AppColors.textDim,
                         ),
                       ),
                       Text(
@@ -84,11 +91,15 @@ class BatteryHealthOverviewCard extends StatelessWidget {
                         ),
                         const Spacer(),
                         Text(
-                          report.hasLiveTelemetry ? '${report.healthPercentage}%' : '--',
+                          report.hasLiveTelemetry
+                              ? '${report.healthPercentage}%'
+                              : '--',
                           style: GoogleFonts.spaceGrotesk(
                             fontSize: 18,
                             fontWeight: FontWeight.w700,
-                            color: report.hasLiveTelemetry ? AppColors.primary : AppColors.textDim,
+                            color: report.hasLiveTelemetry
+                                ? AppColors.primary
+                                : AppColors.textDim,
                           ),
                         ),
                       ],
@@ -98,8 +109,8 @@ class BatteryHealthOverviewCard extends StatelessWidget {
                       !report.hasLiveTelemetry
                           ? 'Sin conexión — Esperando datos de telemetría.'
                           : (report.safetyScore >= 90
-                              ? 'Todas las celdas y sistemas eléctricos operan en óptimo estado.'
-                              : 'Alerta en el sistema detectada. Revise los códigos OBD abajo.'),
+                                ? 'Todas las celdas y sistemas eléctricos operan en óptimo estado.'
+                                : 'Alerta en el sistema detectada. Revise los códigos OBD abajo.'),
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 12,
                         color: AppColors.textDim,
@@ -128,17 +139,22 @@ class BatteryHealthOverviewCard extends StatelessWidget {
                     : '-- A',
                 valueColor: report.hasLiveTelemetry
                     ? (report.currentAmp < -0.5
-                        ? AppColors.tertiary
-                        : (report.currentAmp > 0.5 ? AppColors.secondary : AppColors.textDim))
+                          ? AppColors.tertiary
+                          : (report.currentAmp > 0.5
+                                ? AppColors.secondary
+                                : AppColors.textDim))
                     : AppColors.textDim,
               ),
               _buildMiniMetric(
                 label: 'CICLOS CARGA',
-                value: report.hasLiveTelemetry ? '${report.chargeCycles} c.' : '--',
+                value: report.hasLiveTelemetry
+                    ? '${report.chargeCycles} c.'
+                    : '--',
               ),
               _buildMiniMetric(
                 label: 'RESISTENCIA',
-                value: report.hasLiveTelemetry && report.internalResistanceMo > 0
+                value:
+                    report.hasLiveTelemetry && report.internalResistanceMo > 0
                     ? '${report.internalResistanceMo.toStringAsFixed(1)} mΩ'
                     : '-- mΩ',
               ),
@@ -149,7 +165,11 @@ class BatteryHealthOverviewCard extends StatelessWidget {
     );
   }
 
-  Widget _buildMiniMetric({required String label, required String value, Color? valueColor}) {
+  Widget _buildMiniMetric({
+    required String label,
+    required String value,
+    Color? valueColor,
+  }) {
     return Expanded(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -178,4 +198,3 @@ class BatteryHealthOverviewCard extends StatelessWidget {
     );
   }
 }
-

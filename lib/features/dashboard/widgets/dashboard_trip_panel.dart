@@ -1,4 +1,3 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
@@ -46,7 +45,11 @@ class DashboardTripPanel extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.timer_outlined, size: 18, color: AppColors.primary),
+                  const Icon(
+                    Icons.timer_outlined,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -126,4 +129,3 @@ class DashboardTripPanel extends StatelessWidget {
     );
   }
 }
-

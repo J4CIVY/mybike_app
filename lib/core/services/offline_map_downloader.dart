@@ -2,12 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
-import '../models/offline_map_models.dart';
 import 'offline_map_service.dart';
 
 /// Manejador de descargas por lotes de teselas de mapas para uso offline.
@@ -81,13 +79,21 @@ class OfflineMapDownloader {
     _pauseRequested = true;
   }
 
-  Future<void> resumeDownload({void Function(DownloadProgress progress)? onProgress}) async {
+  Future<void> resumeDownload({
+    void Function(DownloadProgress progress)? onProgress,
+  }) async {
     final task = await getPendingTask();
     if (task == null) return;
 
     final bounds = LatLngBounds(
-      LatLng((task['south'] as num).toDouble(), (task['west'] as num).toDouble()),
-      LatLng((task['north'] as num).toDouble(), (task['east'] as num).toDouble()),
+      LatLng(
+        (task['south'] as num).toDouble(),
+        (task['west'] as num).toDouble(),
+      ),
+      LatLng(
+        (task['north'] as num).toDouble(),
+        (task['east'] as num).toDouble(),
+      ),
     );
     final minZoom = (task['minZoom'] as num).toInt();
     final maxZoom = (task['maxZoom'] as num).toInt();
@@ -107,7 +113,8 @@ class OfflineMapDownloader {
     required int minZoom,
     required int maxZoom,
     String regionName = 'Mapa offline',
-    String urlTemplate = 'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
+    String urlTemplate =
+        'https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png',
     List<String> subdomains = const ['a', 'b', 'c'],
     void Function(DownloadProgress progress)? onProgress,
   }) async {
@@ -116,7 +123,11 @@ class OfflineMapDownloader {
     _cancelRequested = false;
     _pauseRequested = false;
 
-    final tiles = _service.calculateTileList(bounds: bounds, minZoom: minZoom, maxZoom: maxZoom);
+    final tiles = _service.calculateTileList(
+      bounds: bounds,
+      minZoom: minZoom,
+      maxZoom: maxZoom,
+    );
     final total = tiles.length;
     int current = 0;
     int totalBytes = 0;
@@ -134,7 +145,15 @@ class OfflineMapDownloader {
       onProgress?.call(p);
     }
 
-    notify(DownloadProgress(current: 0, total: total, bytes: 0, isRunning: true, regionName: regionName));
+    notify(
+      DownloadProgress(
+        current: 0,
+        total: total,
+        bytes: 0,
+        isRunning: true,
+        regionName: regionName,
+      ),
+    );
 
     final subLen = subdomains.length;
     int subIndex = 0;
@@ -150,13 +169,15 @@ class OfflineMapDownloader {
         if (await file.exists()) {
           current++;
           totalBytes += await file.length();
-          notify(DownloadProgress(
-            current: current,
-            total: total,
-            bytes: totalBytes,
-            isRunning: true,
-            regionName: regionName,
-          ));
+          notify(
+            DownloadProgress(
+              current: current,
+              total: total,
+              bytes: totalBytes,
+              isRunning: true,
+              regionName: regionName,
+            ),
+          );
           continue;
         }
 
@@ -168,10 +189,12 @@ class OfflineMapDownloader {
             .replaceAll('{y}', '${tile.y}');
 
         try {
-          final res = await http.get(
-            Uri.parse(url),
-            headers: {'User-Agent': 'DatBikeApp/2.6.4 (offline-cache)'},
-          ).timeout(const Duration(seconds: 8));
+          final res = await http
+              .get(
+                Uri.parse(url),
+                headers: {'User-Agent': 'DatBikeApp/2.6.4 (offline-cache)'},
+              )
+              .timeout(const Duration(seconds: 8));
 
           if (res.statusCode == 200 && res.bodyBytes.isNotEmpty) {
             await file.parent.create(recursive: true);
@@ -181,13 +204,15 @@ class OfflineMapDownloader {
         } catch (_) {}
 
         current++;
-        notify(DownloadProgress(
-          current: current,
-          total: total,
-          bytes: totalBytes,
-          isRunning: true,
-          regionName: regionName,
-        ));
+        notify(
+          DownloadProgress(
+            current: current,
+            total: total,
+            bytes: totalBytes,
+            isRunning: true,
+            regionName: regionName,
+          ),
+        );
       }
     }
 
@@ -198,37 +223,42 @@ class OfflineMapDownloader {
 
     if (_cancelRequested) {
       await clearPendingTask();
-      notify(DownloadProgress(
-        current: current,
-        total: total,
-        bytes: totalBytes,
-        isRunning: false,
-        isPaused: false,
-        isCompleted: false,
-        regionName: regionName,
-      ));
+      notify(
+        DownloadProgress(
+          current: current,
+          total: total,
+          bytes: totalBytes,
+          isRunning: false,
+          isPaused: false,
+          isCompleted: false,
+          regionName: regionName,
+        ),
+      );
     } else if (_pauseRequested) {
-      notify(DownloadProgress(
-        current: current,
-        total: total,
-        bytes: totalBytes,
-        isRunning: false,
-        isPaused: true,
-        isCompleted: false,
-        regionName: regionName,
-      ));
+      notify(
+        DownloadProgress(
+          current: current,
+          total: total,
+          bytes: totalBytes,
+          isRunning: false,
+          isPaused: true,
+          isCompleted: false,
+          regionName: regionName,
+        ),
+      );
     } else {
       await clearPendingTask();
-      notify(DownloadProgress(
-        current: current,
-        total: total,
-        bytes: totalBytes,
-        isRunning: false,
-        isPaused: false,
-        isCompleted: true,
-        regionName: regionName,
-      ));
+      notify(
+        DownloadProgress(
+          current: current,
+          total: total,
+          bytes: totalBytes,
+          isRunning: false,
+          isPaused: false,
+          isCompleted: true,
+          regionName: regionName,
+        ),
+      );
     }
   }
 }
-
